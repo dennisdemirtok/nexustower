@@ -5,7 +5,7 @@
 import { MAPS, ECON, CREEP_KEYS, waveHpMul } from '../public/js/config.js';
 import { makeBoard } from '../public/js/board.js';
 import { spawn, stepBoard, towerDps } from '../public/js/sim.js';
-import { initAI, aiThink } from '../public/js/ai.js';
+import { initAI, aiThink, aiNoteIncoming } from '../public/js/ai.js';
 
 const mapIndex = Number(process.argv[2] ?? 0);
 const cfgA = MAPS[Number(process.argv[3] ?? mapIndex)].ai;
@@ -45,6 +45,7 @@ while (time < 60 * 30 && !winner) {
     while (me.pendingSend.length) {
       const s = me.pendingSend.shift();
       spawn(foe.board, s.key, waveHpMul(wave), s.lv);
+      aiNoteIncoming(foe, s.key);
       me.sent++;
     }
   }
@@ -75,7 +76,7 @@ function snap(s) {
     guld: Math.round(s.gold),
     ink: s.income,
     torn: s.board.towers.length,
-    dps: s.board.towers.reduce((a, t) => a + towerDps(t.type, t.lv), 0),
+    dps: s.board.towers.reduce((a, t) => a + towerDps(t.type, t.lv, t.branch), 0),
     nivåer: s.board.towers.map(t => t.lv + 1).sort((a, b) => b - a).join(''),
     påBanan: s.board.creeps.length,
     skickat: s.sent,

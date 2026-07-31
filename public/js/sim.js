@@ -1,5 +1,5 @@
-import { TOWERS, CREEPS, sendHpMul } from './config.js';
-import { pPos } from './board.js';
+import { CREEPS, sendHpMul, towerStat, towerFace, dmgMul } from './config.js';
+import { cPos, routeLen } from './board.js';
 
 const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
 
@@ -12,36 +12,42 @@ export function spawn(b, type, wave, lv = 0, hpMulExtra = 1) {
   for (let i = 0; i < n; i++) {
     b.creeps.push({
       id: ++SEQ,
-      type, lv,
+      type, lv, cls: d.cls, fly: !!d.fly,
       t: -i * 0.5 - Math.random() * 0.3,
       hp, maxHp: hp,
       spd: d.spd, slow: 0, slowT: 0, r: d.r,
-      armor: (d.armor || 0) * (1 + lv * 0.25),
+      burn: 0, burnT: 0,
       regen: (d.regen || 0) * wave * sendHpMul(lv),
       bounty: Math.round(d.bounty * (1 + lv * 0.3) * Math.min(3, wave)),
-      leak: d.leak, wob: Math.random() * 6.28, flash: 0, dead: false,
+      leak: d.leak,
+      wob: Math.random() * 6.28, bob: Math.random() * 6.28,
+      flash: 0, dead: false,
     });
   }
 }
 
-/* Pansar är platt avdrag per träff — därför är många små skott (PULS)
-   dåliga mot BJÄSSE, medan RAIL och BLAST går rakt igenom.
-   Minst 12% av skadan går alltid fram så inget blir helt immunt.     */
-function applyDamage(c, amount, pierce = 0) {
-  const armor = Math.max(0, c.armor * (1 - pierce));
-  return Math.max(amount * 0.12, amount - armor);
+/* Skadeberäkning: typ mot pansarklass.
+   GAUSS (trueDmg) går utanför tabellen helt.
+   LUFTVÄRN (airBonus) lägger på en extra faktor mot FLYG.        */
+export function effective(amount, st, cls) {
+  if (st && st.trueDmg) return amount;
+  let m = dmgMul(st && st.dmgType, cls);
+  if (st && st.airBonus && cls === 'flyg') m *= st.airBonus;
+  return amount * m;
 }
 
-export function damage(b, c, amount, pierce, hooks) {
-  if (c.dead) return;
-  c.hp -= applyDamage(c, amount, pierce);
+export function damage(b, c, amount, st, hooks) {
+  if (c.dead) return 0;
+  const dealt = effective(amount, st, c.cls);
+  c.hp -= dealt;
   c.flash = 1;
   if (c.hp <= 0) {
     c.dead = true;
-    const p = pPos(b, c.t);
+    const p = cPos(b, c);
     addFx(b, 'boom', p.x, p.y, CREEPS[c.type].color, 0.55 + c.r);
     if (hooks.onKill) hooks.onKill(c, p);
   }
+  return dealt;
 }
 
 export function addFx(b, k, x, y, color, r) {
@@ -53,37 +59,51 @@ export function addFloat(b, x, y, text, color) {
   b.floats.push({ x, y, text, color, life: 0.9, max: 0.9 });
 }
 
+/* Statistiken för ett torn, med skadetypen inbakad så sim och UI
+   alltid är överens om vad som faktiskt skjuts. */
+export function statOf(tw) {
+  const st = towerStat(tw.type, tw.lv, tw.branch);
+  const face = towerFace(tw.type, tw.lv, tw.branch);
+  return { ...st, dmgType: face.dmg, color: face.color };
+}
+
 /* ---------- torn skjuter ---------- */
+function targetsInRange(b, tw, st, max) {
+  const r2 = st.range * st.range;
+  const found = [];
+  for (const c of b.creeps) {
+    if (c.dead || c.t < 0) continue;
+    const p = cPos(b, c);
+    if (dist2(tw.cx, tw.cy, p.x, p.y) <= r2) found.push({ c, p });
+  }
+  // Den som hunnit längst är farligast — skjut på den först.
+  found.sort((a, z) => (z.c.t / routeLen(b, z.c)) - (a.c.t / routeLen(b, a.c)));
+  return found.slice(0, max);
+}
+
 function fire(b, tw, dt, hooks) {
   tw.cd -= dt;
   tw.flash = Math.max(0, tw.flash - dt * 5);
   if (tw.cd > 0) return;
-  const st = TOWERS[tw.type].lv[tw.lv];
-  const r2 = st.range * st.range;
 
-  // Målval: creepen som hunnit längst och är inom räckvidd.
-  let best = null, bestT = -1;
-  for (const c of b.creeps) {
-    if (c.dead || c.t < 0) continue;
-    const p = pPos(b, c.t);
-    if (c.t > bestT && dist2(tw.cx, tw.cy, p.x, p.y) <= r2) { best = c; bestT = c.t; }
-  }
-  if (!best) return;
+  const st = statOf(tw);
+  const picks = targetsInRange(b, tw, st, st.multi || 1);
+  if (!picks.length) return;
 
-  const p = pPos(b, best.t);
-  tw.angle = Math.atan2(p.y - tw.cy, p.x - tw.cx);
+  const first = picks[0];
+  tw.angle = Math.atan2(first.p.y - tw.cy, first.p.x - tw.cx);
   tw.cd = st.rate;
   tw.flash = 1;
 
-  if (tw.type === 'arc') {
-    const hits = [best];
-    let cur = best;
+  if (st.chain) {
+    const hits = [first.c];
+    let cur = first.c;
     for (let i = 1; i < st.chain; i++) {
       let nx = null, nd = 1e9;
-      const cp = pPos(b, cur.t);
+      const cp = cPos(b, cur);
       for (const c of b.creeps) {
         if (c.dead || c.t < 0 || hits.includes(c)) continue;
-        const q = pPos(b, c.t);
+        const q = cPos(b, c);
         const d = dist2(cp.x, cp.y, q.x, q.y);
         if (d < 4.84 && d < nd) { nd = d; nx = c; }
       }
@@ -92,47 +112,60 @@ function fire(b, tw, dt, hooks) {
     }
     const pts = [{ x: tw.cx, y: tw.cy }];
     hits.forEach((c, i) => {
-      const q = pPos(b, c.t);
+      const q = cPos(b, c);
       pts.push({ x: q.x, y: q.y });
-      damage(b, c, st.dmg * Math.pow(0.78, i), 0, hooks);
+      damage(b, c, st.dmg * Math.pow(0.8, i), st, hooks);
     });
-    b.bolts.push({ pts, life: 0.2, color: TOWERS.arc.color });
+    b.bolts.push({ pts, life: 0.2, color: st.color });
     return;
   }
 
-  b.shots.push({
-    x: tw.cx, y: tw.cy, target: best, type: tw.type, st,
-    spd: tw.type === 'blast' ? 8 : tw.type === 'rail' ? 26 : 15,
-    color: TOWERS[tw.type].color, trail: [],
-  });
+  for (const pick of picks) {
+    b.shots.push({
+      x: tw.cx, y: tw.cy, target: pick.c, st,
+      spd: st.splash ? 8 : st.range > 4 ? 26 : 15,
+      color: st.color, trail: [],
+    });
+  }
+}
+
+function impact(b, s, tp, hooks) {
+  const st = s.st;
+  if (st.splash) {
+    const aoe = st.splash;
+    for (const c of b.creeps) {
+      if (c.dead || c.t < 0) continue;
+      const q = cPos(b, c);
+      if (dist2(q.x, q.y, tp.x, tp.y) <= aoe * aoe) {
+        damage(b, c, st.dmg, st, hooks);
+        applyOnHit(c, st);
+      }
+    }
+    addFx(b, 'boom', tp.x, tp.y, st.color, st.splash);
+    return;
+  }
+  damage(b, s.target, st.dmg, st, hooks);
+  applyOnHit(s.target, st);
+  addFx(b, 'spark', tp.x, tp.y, st.color);
+}
+
+function applyOnHit(c, st) {
+  if (c.dead) return;
+  if (st.slow) { c.slow = Math.max(c.slow, st.slow); c.slowT = st.slowT; }
+  if (st.burn) { c.burn = Math.max(c.burn, st.burn / st.burnT); c.burnT = st.burnT; c.burnSt = st; }
 }
 
 function stepShots(b, dt, hooks) {
   for (const s of b.shots) {
     if (s.done) continue;
-    if (s.target.dead && s.type !== 'blast') { s.done = true; continue; }
-    const tp = pPos(b, Math.max(0, s.target.t));
+    if (s.target.dead && !s.st.splash) { s.done = true; continue; }
+    const tp = cPos(b, s.target);
     const dx = tp.x - s.x, dy = tp.y - s.y;
     const d = Math.hypot(dx, dy);
     const step = s.spd * dt;
     if (d <= step || d < 0.12) {
       s.done = true;
-      if (s.type === 'blast') {
-        const aoe = s.st.splash;
-        for (const c of b.creeps) {
-          if (c.dead || c.t < 0) continue;
-          const q = pPos(b, c.t);
-          if (dist2(q.x, q.y, tp.x, tp.y) <= aoe * aoe) damage(b, c, s.st.dmg, s.st.pierce || 0, hooks);
-        }
-        addFx(b, 'boom', tp.x, tp.y, '#ff9d54', s.st.splash);
-      } else {
-        damage(b, s.target, s.st.dmg, s.st.pierce || 0, hooks);
-        if (s.type === 'cryo') {
-          s.target.slow = Math.max(s.target.slow, s.st.slow);
-          s.target.slowT = s.st.slowT;
-        }
-        addFx(b, 'spark', tp.x, tp.y, s.color);
-      }
+      impact(b, s, tp, hooks);
     } else {
       s.trail.push({ x: s.x, y: s.y });
       if (s.trail.length > 5) s.trail.shift();
@@ -149,15 +182,22 @@ function stepCreeps(b, dt, hooks) {
     if (c.dead) continue;
     c.flash = Math.max(0, c.flash - dt * 6);
     if (c.slowT > 0) { c.slowT -= dt; if (c.slowT <= 0) c.slow = 0; }
+    if (c.burnT > 0) {
+      c.burnT -= dt;
+      damage(b, c, c.burn * dt, c.burnSt, hooks);
+      if (c.burnT <= 0) c.burn = 0;
+      if (c.dead) continue;
+    }
     if (c.regen && c.hp < c.maxHp) c.hp = Math.min(c.maxHp, c.hp + c.regen * dt);
     c.wob += dt * 6;
+    c.bob += dt * 2.4;
     c.t += c.spd * (1 - c.slow) * dt;
-    if (c.t >= b.len) {
+    if (c.t >= routeLen(b, c)) {
       c.dead = true;
       leaked += c.leak;
       b.shake = 1;
       b.hurt = 1;
-      const p = pPos(b, b.len);
+      const p = cPos(b, c);
       addFx(b, 'ring', p.x, p.y, '#ff5d73', 1.2);
     }
   }
@@ -186,12 +226,25 @@ export function stepBoard(b, dt, hooks = {}) {
 /* Fjärrbana (multiplayer): vi simulerar inte, vi extrapolerar mellan
    snapshots så det ser levande ut i stället för att hacka i 6 fps. */
 export function stepRemote(b, dt) {
-  for (const c of b.creeps) c.t += c.spd * (1 - c.slow) * dt;
+  for (const c of b.creeps) { c.t += c.spd * (1 - c.slow) * dt; c.bob += dt * 2.4; c.wob += dt * 6; }
   stepFx(b, dt);
 }
 
-export function towerDps(type, lv) {
-  const st = TOWERS[type].lv[lv];
-  const mult = type === 'arc' ? st.chain * 0.7 : type === 'blast' ? 2.2 : 1;
-  return Math.round(st.dmg / st.rate * mult);
+/* Ungefärlig DPS för UI och AI. Räknar in splash/kedja/multi grovt. */
+export function towerDps(type, lv, branch) {
+  const st = towerStat(type, lv, branch);
+  let mult = 1;
+  if (st.chain) mult = st.chain * 0.75;
+  else if (st.splash) mult = 2.2;
+  else if (st.multi) mult = st.multi;
+  const burn = st.burn ? st.burn / st.rate : 0;
+  return Math.round((st.dmg / st.rate) * mult + burn);
+}
+
+/* DPS mot en specifik pansarklass — det är den siffran som betyder något. */
+export function towerDpsVs(type, lv, branch, cls) {
+  const st = towerStat(type, lv, branch);
+  const face = towerFace(type, lv, branch);
+  const base = towerDps(type, lv, branch);
+  return Math.round(effective(base, { ...st, dmgType: face.dmg }, cls));
 }

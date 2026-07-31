@@ -1,10 +1,10 @@
 import {
-  MAPS, TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON,
-  buildCost, sendUpCost, creepIncome, waveHpMul,
+  MAPS, TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BASE_LEVELS, MAX_TOWER_LV,
+  buildCost, sendUpCost, creepIncome, waveHpMul, towerStat, towerFace, needsBranch,
 } from './config.js';
 import { makeBoard, towerAt } from './board.js';
 import { spawn, stepBoard, stepRemote, addFx, addFloat } from './sim.js';
-import { initAI, aiThink } from './ai.js';
+import { initAI, aiThink, aiNoteIncoming } from './ai.js';
 import * as R from './render.js';
 import * as UI from './ui.js';
 import * as Net from './net.js';
@@ -146,8 +146,12 @@ function processQueue() {
     G.me.sent++;
     G.sendCd = ECON.sendCooldown;
     const lv = G.me.sendLv[key];
-    if (G.mode === 'campaign') spawn(G.foe.board, key, waveMul(), lv);
-    else Net.send({ t: 'send', key, lv, wave: G.wave });
+    if (G.mode === 'campaign') {
+      spawn(G.foe.board, key, waveMul(), lv);
+      aiNoteIncoming(G.foe, key);   // så WARDEN kan bygga mot det du faktiskt skickar
+    } else {
+      Net.send({ t: 'send', key, lv, wave: G.wave });
+    }
     UI.alertTab('atk');
     UI.refreshSendbar();
   }
@@ -185,19 +189,29 @@ function build(key) {
   const cost = buildCost(key, b.towers.length);
   if (G.me.gold < cost) { UI.toast('För lite guld'); return; }
   G.me.gold -= cost;
-  b.towers.push({ type: key, cx: G.sel.cx, cy: G.sel.cy, lv: 0, cd: 0, invested: cost, angle: -1.57, flash: 0 });
+  b.towers.push({
+    type: key, cx: G.sel.cx, cy: G.sel.cy, lv: 0, branch: null,
+    cd: 0, invested: cost, angle: -1.57, flash: 0,
+  });
   addFx(b, 'ring', G.sel.cx, G.sel.cy, TOWERS[key].color, 1.2);
   UI.closeSheets();
   UI.updateHUD();
 }
 
-function upgradeTower(tw) {
-  const nxt = TOWERS[tw.type].lv[tw.lv + 1];
-  if (!nxt || G.me.gold < nxt.cost) return;
+/* branch krävs bara vid gaffeln (nivå 3 → 4). Valet är permanent. */
+function upgradeTower(tw, branch) {
+  if (!G || tw.lv + 1 >= MAX_TOWER_LV) return;
+  if (needsBranch(tw) && !branch) return;
+  const useBranch = tw.lv + 1 >= BASE_LEVELS ? (branch || tw.branch || 'a') : null;
+  const nxt = towerStat(tw.type, tw.lv + 1, useBranch);
+  if (!nxt || G.me.gold < nxt.cost) { UI.toast('För lite guld'); return; }
   G.me.gold -= nxt.cost;
   tw.lv++;
+  if (useBranch) tw.branch = useBranch;
   tw.invested += nxt.cost;
-  addFx(G.me.board, 'ring', tw.cx, tw.cy, TOWERS[tw.type].color, 1.2);
+  const face = towerFace(tw.type, tw.lv, tw.branch);
+  addFx(G.me.board, 'ring', tw.cx, tw.cy, face.color, 1.4);
+  if (branch) UI.banner(face.name, face.tag);
   UI.openTower(tw);
   UI.updateHUD();
 }
@@ -271,7 +285,7 @@ function snapshot() {
   const b = G.me.board;
   return {
     l: b.lives,
-    tw: b.towers.map(t => [TOWER_KEYS.indexOf(t.type), t.cx, t.cy, t.lv]),
+    tw: b.towers.map(t => [TOWER_KEYS.indexOf(t.type), t.cx, t.cy, t.lv, t.branch === 'b' ? 1 : 0]),
     cr: b.creeps.filter(c => c.t >= 0).map(c => [
       c.id, CREEP_KEYS.indexOf(c.type), +c.t.toFixed(2),
       +(c.hp / c.maxHp).toFixed(2), c.lv, c.slow > 0 ? 1 : 0,
@@ -285,6 +299,7 @@ function applySnapshot(s) {
   b.lives = s.l;
   b.towers = s.tw.map(a => ({
     type: TOWER_KEYS[a[0]], cx: a[1], cy: a[2], lv: a[3],
+    branch: a[3] >= BASE_LEVELS ? (a[4] ? 'b' : 'a') : null,
     cd: 0, invested: 0, angle: -1.57, flash: 0,
   }));
   const map = new Map(b.creeps.map(c => [c.id, c]));
@@ -298,8 +313,9 @@ function applySnapshot(s) {
       const d = CREEPS[type];
       c = {
         id, type, lv, t, hp: frac, maxHp: 1, spd: d.spd, slow: 0, slowT: 0,
-        r: d.r, armor: d.armor || 0, regen: 0, bounty: 0, leak: d.leak,
-        wob: Math.random() * 6.28, flash: 0, dead: false,
+        r: d.r, cls: d.cls, fly: !!d.fly, regen: 0, bounty: 0, leak: d.leak,
+        burn: 0, burnT: 0,
+        wob: Math.random() * 6.28, bob: Math.random() * 6.28, flash: 0, dead: false,
       };
       b.creeps.push(c);
     }

@@ -23,8 +23,24 @@ export function makeBoard(wp) {
     shake: 0, hurt: 0, remote: false,
   };
   b.buildable = buildableCells(b);
+  /* Flygande creeps struntar i vägen och går rakt från in- till utgång.
+     Sträckan är mycket kortare, vilket är hela poängen med FLYG. */
+  const a = pts[0], z = pts[pts.length - 1];
+  b.air = { x0: a[0], y0: a[1], x1: z[0], y1: z[1], len: Math.hypot(z[0] - a[0], z[1] - a[1]) };
   return b;
 }
+
+/* Position för en creep — följer vägen, eller flyger rakt. */
+export function cPos(b, c) {
+  if (!c.fly) return pPos(b, c.t);
+  const f = Math.max(0, Math.min(1, c.t / b.air.len));
+  return {
+    x: b.air.x0 + (b.air.x1 - b.air.x0) * f,
+    y: b.air.y0 + (b.air.y1 - b.air.y0) * f,
+  };
+}
+
+export const routeLen = (b, c) => (c.fly ? b.air.len : b.len);
 
 /* Rutor som är värda att bygga på: inte väg, och inom 2.6 rutor
    från banan. Resten dimmas ner så man ser var man faktiskt kan agera. */

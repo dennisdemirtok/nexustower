@@ -1,5 +1,5 @@
-import { COLS, ROWS, TOWERS, CREEPS } from './config.js';
-import { pPos } from './board.js';
+import { COLS, ROWS, CREEPS, ARMOR, towerFace, towerStat } from './config.js';
+import { pPos, cPos } from './board.js';
 
 /* ============================================================
    Rendering.
@@ -207,6 +207,20 @@ function drawPath(b, s, hostile, time) {
   CX.stroke();
   CX.setLineDash([]);
 
+  // Luftkorridoren visas bara när det faktiskt flyger något där.
+  if (b.creeps.some(c => c.fly && c.t >= 0)) {
+    CX.save();
+    CX.setLineDash([cell * 0.14, cell * 0.3]);
+    CX.lineDashOffset = -time * cell * 2.2;
+    CX.strokeStyle = 'rgba(102,224,255,.35)';
+    CX.lineWidth = 1.5;
+    CX.beginPath();
+    CX.moveTo(gx(s, b.air.x0), gy(s, b.air.y0));
+    CX.lineTo(gx(s, b.air.x1), gy(s, b.air.y1));
+    CX.stroke();
+    CX.restore();
+  }
+
   const en = pPos(b, 0), ex = pPos(b, b.len);
   portal(gx(s, en.x), gy(s, en.y), hostile ? '#ff5d73' : '#ffb454', cell, time, false);
   portal(gx(s, ex.x), gy(s, ex.y), hostile ? '#4fd8eb' : '#ff5d73', cell, time, true);
@@ -243,7 +257,8 @@ function drawSelection(G, b, s) {
   const { cell, ox, oy } = s;
   const sx = gx(s, G.sel.cx), sy = gy(s, G.sel.cy);
   if (G.sel.tower) {
-    const st = TOWERS[G.sel.tower.type].lv[G.sel.tower.lv];
+    const tw = G.sel.tower;
+    const st = towerStat(tw.type, tw.lv, tw.branch);
     ring(sx, sy, st.range * cell, 'rgba(79,216,235,.06)', 'rgba(79,216,235,.45)');
   } else {
     if (G.previewRange) ring(sx, sy, G.previewRange * cell, 'rgba(255,180,84,.05)', 'rgba(255,180,84,.4)');
@@ -263,51 +278,68 @@ function ring(x, y, r, fill, stroke) {
 }
 
 function drawTower(tw, s, hostile, time) {
-  const def = TOWERS[tw.type];
+  const face = towerFace(tw.type, tw.lv, tw.branch);
   const { cell } = s;
-  const x = gx(s, tw.cx), y = gy(s, tw.cy), size = cell * 0.76;
+  const x = gx(s, tw.cx), y = gy(s, tw.cy), size = cell * 0.78;
+  const maxed = tw.lv >= 5;
 
-  // sockel
+  // sockel med fasad kant
   const g = CX.createLinearGradient(x, y - size / 2, x, y + size / 2);
-  if (hostile) { g.addColorStop(0, '#2a1830'); g.addColorStop(1, '#180d1c'); }
-  else { g.addColorStop(0, '#1e2648'); g.addColorStop(1, '#141a33'); }
+  if (hostile) { g.addColorStop(0, '#2c1934'); g.addColorStop(1, '#160c1a'); }
+  else { g.addColorStop(0, '#232c54'); g.addColorStop(1, '#131931'); }
   CX.fillStyle = g;
-  CX.strokeStyle = hostile ? 'rgba(255,93,115,.28)' : 'rgba(120,140,220,.3)';
+  CX.strokeStyle = hostile ? 'rgba(255,93,115,.3)' : 'rgba(130,150,235,.34)';
   CX.lineWidth = 1.2;
-  roundRect(x - size / 2, y - size / 2, size, size, size * 0.24);
+  roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
   CX.fill(); CX.stroke();
 
-  // nivåring
+  // svag inre glöd i tornets skadetypsfärg
+  const glow = CX.createRadialGradient(x, y, 0, x, y, size * 0.55);
+  glow.addColorStop(0, face.color + '2a');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  CX.fillStyle = glow;
+  roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
+  CX.fill();
+
+  // nivåbåge runt sockeln — full cirkel vid max
   if (tw.lv > 0) {
     CX.beginPath();
-    CX.arc(x, y, size * 0.52, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * tw.lv) / 5);
-    CX.strokeStyle = def.color;
-    CX.globalAlpha = 0.75;
-    CX.lineWidth = 2;
+    CX.arc(x, y, size * 0.54, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * tw.lv) / 5);
+    CX.strokeStyle = face.color;
+    CX.globalAlpha = maxed ? 0.95 : 0.7;
+    CX.lineWidth = maxed ? 2.6 : 2;
     CX.stroke();
     CX.globalAlpha = 1;
+  }
+  // grenmarkering: liten prick i hörnet när tornet valt specialisering
+  if (tw.branch) {
+    CX.beginPath();
+    CX.arc(x + size * 0.36, y - size * 0.36, Math.max(1.6, cell * 0.045), 0, 7);
+    CX.fillStyle = face.color;
+    CX.fill();
   }
 
   CX.save();
   CX.translate(x, y);
   CX.rotate(tw.angle + Math.PI / 2);
   const hg = size * 0.31;
-  CX.strokeStyle = def.color;
+  CX.strokeStyle = face.color;
   CX.lineWidth = Math.max(1.6, cell * 0.055);
   CX.lineJoin = 'round';
-  if (tw.flash > 0) { CX.shadowColor = def.color; CX.shadowBlur = 16 * tw.flash; }
+  CX.lineCap = 'round';
+  if (tw.flash > 0) { CX.shadowColor = face.color; CX.shadowBlur = 16 * tw.flash; }
   CX.beginPath();
-  shapePath(def.shape, hg);
+  shapePath(face.shape, hg);
   CX.stroke();
   CX.shadowBlur = 0;
   CX.beginPath();
   CX.arc(0, 0, Math.max(1.8, cell * 0.055), 0, 7);
-  CX.fillStyle = def.color;
+  CX.fillStyle = face.color;
   CX.fill();
   if (tw.flash > 0.4) {
     CX.beginPath();
     CX.moveTo(0, -hg);
-    CX.lineTo(0, -hg - cell * 0.22 * tw.flash);
+    CX.lineTo(0, -hg - cell * 0.24 * tw.flash);
     CX.strokeStyle = '#fff';
     CX.globalAlpha = tw.flash;
     CX.lineWidth = 2;
@@ -318,47 +350,141 @@ function drawTower(tw, s, hostile, time) {
 }
 
 function shapePath(shape, hg) {
-  if (shape === 'tri') { CX.moveTo(0, -hg); CX.lineTo(hg * 0.92, hg * 0.78); CX.lineTo(-hg * 0.92, hg * 0.78); CX.closePath(); }
-  else if (shape === 'hex') { for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i - Math.PI / 2; const px = hg * 0.9 * Math.cos(a), py = hg * 0.9 * Math.sin(a); i ? CX.lineTo(px, py) : CX.moveTo(px, py); } CX.closePath(); }
-  else if (shape === 'dia') { CX.moveTo(0, -hg); CX.lineTo(hg, 0); CX.lineTo(0, hg); CX.lineTo(-hg, 0); CX.closePath(); }
-  else if (shape === 'star') { for (let i = 0; i < 8; i++) { const a = Math.PI / 4 * i - Math.PI / 2, r = i % 2 ? hg * 0.42 : hg * 0.95; const px = r * Math.cos(a), py = r * Math.sin(a); i ? CX.lineTo(px, py) : CX.moveTo(px, py); } CX.closePath(); }
-  else if (shape === 'cross') { CX.moveTo(0, -hg); CX.lineTo(0, hg * 0.55); CX.moveTo(-hg * 0.62, hg * 0.1); CX.lineTo(hg * 0.62, hg * 0.1); }
+  const poly = (n, rot, rIn) => {
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 / n) * i + rot;
+      const r = rIn && i % 2 ? hg * rIn : hg * 0.92;
+      const px = r * Math.cos(a), py = r * Math.sin(a);
+      i ? CX.lineTo(px, py) : CX.moveTo(px, py);
+    }
+    CX.closePath();
+  };
+  switch (shape) {
+    case 'tri':
+      CX.moveTo(0, -hg); CX.lineTo(hg * 0.92, hg * 0.78); CX.lineTo(-hg * 0.92, hg * 0.78); CX.closePath();
+      break;
+    case 'hex': poly(6, -Math.PI / 2); break;
+    case 'dia': CX.moveTo(0, -hg); CX.lineTo(hg, 0); CX.lineTo(0, hg); CX.lineTo(-hg, 0); CX.closePath(); break;
+    case 'star': poly(8, -Math.PI / 2, 0.42); break;
+    case 'shard':                       // tre spetsar utåt
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (Math.PI * 2 / 3) * i;
+        CX.moveTo(0, 0);
+        CX.lineTo(hg * Math.cos(a), hg * Math.sin(a));
+      }
+      poly(3, Math.PI / 2, 0);
+      break;
+    case 'flame':                       // droppe med veck
+      CX.moveTo(0, -hg);
+      CX.quadraticCurveTo(hg * 0.85, -hg * 0.1, 0, hg * 0.85);
+      CX.quadraticCurveTo(-hg * 0.85, -hg * 0.1, 0, -hg);
+      break;
+    case 'bolt':                        // blixt
+      CX.moveTo(hg * 0.25, -hg);
+      CX.lineTo(-hg * 0.45, hg * 0.1);
+      CX.lineTo(hg * 0.1, hg * 0.1);
+      CX.lineTo(-hg * 0.3, hg);
+      break;
+    case 'aa':                          // dubbelpipa mot skyn
+      CX.moveTo(-hg * 0.28, -hg); CX.lineTo(-hg * 0.28, hg * 0.5);
+      CX.moveTo(hg * 0.28, -hg); CX.lineTo(hg * 0.28, hg * 0.5);
+      CX.moveTo(-hg * 0.7, hg * 0.55); CX.lineTo(hg * 0.7, hg * 0.55);
+      break;
+    case 'cross':
+    default:
+      CX.moveTo(0, -hg); CX.lineTo(0, hg * 0.55);
+      CX.moveTo(-hg * 0.62, hg * 0.1); CX.lineTo(hg * 0.62, hg * 0.1);
+  }
 }
 
 function drawCreep(c, s, time) {
   const d = CREEPS[c.type];
   const { cell } = s;
-  const x = c._sx, y = c._sy;
+  const x = c._sx;
   const r = c.r * cell;
-  const wob = Math.sin(c.wob) * r * 0.12;
+  // Flygande creeps ritas med höjd: skugga på marken, kropp ovanför.
+  const alt = c.fly ? cell * 0.34 + Math.sin(c.bob) * cell * 0.05 : 0;
+  const y = c._sy - alt;
+  const wob = c.fly ? 0 : Math.sin(c.wob) * r * 0.12;
+
+  if (c.fly) {
+    CX.save();
+    CX.globalAlpha = 0.32;
+    CX.fillStyle = '#04060f';
+    CX.beginPath();
+    CX.ellipse(x, c._sy + cell * 0.06, r * 0.85, r * 0.34, 0, 0, 7);
+    CX.fill();
+    CX.restore();
+  }
 
   CX.save();
   CX.translate(x, y + wob);
 
   if (c.slow > 0) {
-    CX.beginPath(); CX.arc(0, 0, r + 3, 0, 7);
-    CX.strokeStyle = 'rgba(155,216,255,.75)'; CX.lineWidth = 1.5; CX.stroke();
+    CX.beginPath(); CX.arc(0, 0, r + 3.5, 0, 7);
+    CX.strokeStyle = 'rgba(155,216,255,.8)'; CX.lineWidth = 1.5; CX.stroke();
   }
-  if (c.armor > 0) {
-    CX.beginPath(); CX.arc(0, 0, r + 1.5, 0, 7);
-    CX.strokeStyle = 'rgba(220,225,255,.35)'; CX.lineWidth = 2; CX.stroke();
+  if (c.burnT > 0) {
+    CX.beginPath(); CX.arc(0, 0, r + 2.5, 0, 7);
+    CX.strokeStyle = 'rgba(255,107,61,.85)'; CX.lineWidth = 2; CX.stroke();
+  }
+  // Pansarklassen syns direkt på creepen — annars är kontrasystemet osynligt.
+  if (c.cls === 'pans') {
+    CX.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 3 * i - Math.PI / 2, rr = r + 3;
+      const px = rr * Math.cos(a), py = rr * Math.sin(a);
+      i ? CX.lineTo(px, py) : CX.moveTo(px, py);
+    }
+    CX.closePath();
+    CX.strokeStyle = 'rgba(230,225,255,.5)'; CX.lineWidth = 1.6; CX.stroke();
+  } else if (c.cls === 'tung') {
+    CX.beginPath(); CX.arc(0, 0, r + 2.5, 0, 7);
+    CX.strokeStyle = 'rgba(220,230,255,.32)'; CX.lineWidth = 2.4; CX.stroke();
   }
 
   CX.fillStyle = c.flash > 0 ? '#ffffff' : d.color;
   CX.shadowColor = d.color;
   CX.shadowBlur = 10;
   CX.beginPath();
-  if (d.shape === 'dart') { CX.moveTo(r, 0); CX.lineTo(-r * 0.7, r * 0.7); CX.lineTo(-r * 0.3, 0); CX.lineTo(-r * 0.7, -r * 0.7); CX.closePath(); }
-  else if (d.shape === 'tank') { roundRectPath(-r, -r * 0.8, r * 2, r * 1.6, r * 0.35); }
-  else if (d.shape === 'boss') { for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i + time * 1.1; const px = r * Math.cos(a), py = r * Math.sin(a); i ? CX.lineTo(px, py) : CX.moveTo(px, py); } CX.closePath(); }
-  else CX.arc(0, 0, r, 0, 7);
+  switch (d.shape) {
+    case 'dart':
+      CX.moveTo(r, 0); CX.lineTo(-r * 0.7, r * 0.7); CX.lineTo(-r * 0.3, 0); CX.lineTo(-r * 0.7, -r * 0.7); CX.closePath();
+      break;
+    case 'tank':
+      roundRectPath(-r, -r * 0.8, r * 2, r * 1.6, r * 0.35);
+      break;
+    case 'boss':
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 3 * i + time * 1.1;
+        const px = r * Math.cos(a), py = r * Math.sin(a);
+        i ? CX.lineTo(px, py) : CX.moveTo(px, py);
+      }
+      CX.closePath();
+      break;
+    case 'wing': {                       // drönare: kropp med två vingar
+      const flap = Math.sin(time * 14 + c.bob) * r * 0.22;
+      CX.moveTo(0, -r * 0.75);
+      CX.lineTo(r * 0.42, 0);
+      CX.lineTo(0, r * 0.75);
+      CX.lineTo(-r * 0.42, 0);
+      CX.closePath();
+      CX.moveTo(r * 0.3, -r * 0.15); CX.lineTo(r * 1.25, -r * 0.5 + flap); CX.lineTo(r * 0.35, r * 0.2); CX.closePath();
+      CX.moveTo(-r * 0.3, -r * 0.15); CX.lineTo(-r * 1.25, -r * 0.5 + flap); CX.lineTo(-r * 0.35, r * 0.2); CX.closePath();
+      break;
+    }
+    default:
+      CX.arc(0, 0, r, 0, 7);
+  }
   CX.fill();
   CX.shadowBlur = 0;
   CX.strokeStyle = 'rgba(6,8,18,.85)';
   CX.lineWidth = 1.4;
   CX.stroke();
-  CX.fillStyle = 'rgba(8,10,22,.75)';
-  CX.beginPath(); CX.arc(0, 0, r * 0.36, 0, 7); CX.fill();
+  if (d.shape !== 'wing') {
+    CX.fillStyle = 'rgba(8,10,22,.75)';
+    CX.beginPath(); CX.arc(0, 0, r * 0.36, 0, 7); CX.fill();
+  }
   CX.restore();
 
   const frac = Math.max(0, c.hp / c.maxHp);
@@ -370,7 +496,7 @@ function drawCreep(c, s, time) {
     CX.fillRect(x - bw / 2, y - r - bh * 2.6, bw * frac, bh);
   }
   if (c.lv > 0) {
-    CX.fillStyle = '#ffd166';
+    CX.fillStyle = ARMOR[c.cls] ? ARMOR[c.cls].color : '#ffd166';
     for (let i = 0; i < c.lv; i++) {
       CX.beginPath();
       CX.arc(x - r + i * (cell * 0.075), y - r - cell * 0.16, cell * 0.026, 0, 7);
@@ -383,7 +509,7 @@ function drawCreep(c, s, time) {
 export function cacheCreepPositions(b, s) {
   for (const c of b.creeps) {
     if (c.t < 0) continue;
-    const p = pPos(b, c.t);
+    const p = cPos(b, c);
     c._sx = gx(s, p.x);
     c._sy = gy(s, p.y);
   }
@@ -403,7 +529,7 @@ function drawShot(sh, s) {
     CX.globalAlpha = 1;
   }
   CX.beginPath();
-  CX.arc(x, y, sh.type === 'blast' ? s.cell * 0.11 : s.cell * 0.07, 0, 7);
+  CX.arc(x, y, sh.st && sh.st.splash ? s.cell * 0.11 : s.cell * 0.07, 0, 7);
   CX.fillStyle = sh.color;
   CX.shadowColor = sh.color; CX.shadowBlur = 10;
   CX.fill();

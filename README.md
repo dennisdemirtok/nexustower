@@ -46,6 +46,42 @@ inga miljövariabler behöver sättas.
 Öppna Railway-URL:en i mobilen och välj **Lägg till på hemskärmen**. Appen är en
 PWA (`manifest.webmanifest`) och startar då i helskärm utan webbläsarens ramar.
 
+## Skadetyper och pansarklasser
+
+Som i WC3 finns inget torn som är bra mot allt. Varje torn har en **skadetyp**
+och varje creep en **pansarklass**, och tabellen avgör hur mycket som går fram:
+
+|            | LÄTT | TUNG | PANSAR | FLYG |
+|------------|------|------|--------|------|
+| KINETISK   | 115% | 90%  | 60%    | 70%  |
+| SPRÄNG     | 135% | 100% | 120%   | 35%  |
+| TERMISK    | 130% | 115% | 85%    | 80%  |
+| KRYO       | 105% | 120% | 75%    | 110% |
+| ELEKTRISK  | 140% | 85%  | 60%    | 140% |
+| SIKTAD     | 75%  | 135% | 120%   | 130% |
+
+**FLYG** följer inte vägen — drönare går rakt från in- till utgång, vilket ofta
+är en tredjedel så lång sträcka. Ett torn i ett hörn hinner aldrig skjuta på dem.
+
+Hela tabellen finns i spelet under **TYPER** i kontrollraden.
+
+### Grenval vid nivå 4
+
+Torn har sex nivåer. Nivå 1–3 är gemensamma. **Vid nivå 4 väljer du en av två
+specialiseringar** och tornet byter namn, form och ofta skadetyp. Valet är
+permanent — det är där partiet avgörs.
+
+| Torn  | Gren A | Gren B |
+|-------|--------|--------|
+| PULS  | SPLITTER — träffar flera mål, behåller KINETISK | LANS — byter till SIKTAD, krossar TUNG och PANSAR |
+| BLAST | BRAND — TERMISK plus brand som tickar i 3 s | SEISMISK — dubbel sprängradie och inbromsning |
+| KRYO  | FROST — upp till 75 % långsammare | SKÄRVA — offrar bromsen för skada mot flera mål |
+| ARC   | STORM — upp till nio kedjehopp | ÖVERLADDNING — nästan all kraft i första målet |
+| RAIL  | LUFTVÄRN — dubbel skada mot FLYG | GAUSS — ren skada, helt utanför tabellen |
+
+Totalt alltså **5 torn × 2 grenar = 10 sluttorn**, och 6 nivåer var.
+Creeps har dessutom 5 arménivåer var (+35 % HP per nivå).
+
 ## Så är projektet uppbyggt
 
 ```

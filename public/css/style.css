@@ -163,11 +163,84 @@ canvas{position:absolute;inset:0;touch-action:none;display:block}
 .towcard .pr{font-size:11px;color:var(--gold);font-weight:600}
 .towcard .ds{font-size:8.5px;color:var(--muted);text-align:center;line-height:1.3}
 
-.upstats{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap}
+.upstats{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
 .upstats b{color:var(--text)}
 .upstats .up{color:var(--green)}
 
-.armrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+/* ---- skadetyp / pansarklass ---- */
+.chip{
+  display:inline-block;border:1px solid var(--line2);border-radius:999px;
+  padding:1px 7px;font-size:8.5px;font-weight:600;letter-spacing:.08em;
+  font-family:'Chakra Petch',sans-serif;white-space:nowrap;
+}
+.effrow{display:flex;gap:5px;margin-bottom:11px;flex-wrap:wrap}
+.eff{
+  display:flex;align-items:center;gap:4px;font-size:9px;letter-spacing:.04em;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px 7px;
+  font-family:'Chakra Petch',sans-serif;color:var(--muted);
+}
+.eff i{font-style:normal;opacity:.8}
+.eff b{font-size:10px}
+.eff.good{border-color:#1f6b4d;color:var(--green)}
+.eff.bad{border-color:#6b1f33;color:var(--coral)}
+.eff.mid b{color:var(--text)}
+
+/* ---- grenval vid nivå 4 ---- */
+.forkhead{
+  font-family:'Chakra Petch',sans-serif;font-size:10px;letter-spacing:.14em;
+  color:var(--amber);margin-bottom:7px;text-align:center;
+}
+.forkrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.forkcard{
+  background:var(--panel2);border:1px solid var(--line2);border-radius:var(--r);
+  padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  cursor:pointer;transition:transform .09s,border-color .15s;text-align:center;
+}
+.forkcard:active{transform:scale(.96)}
+.forkcard.poor{opacity:.45}
+.forkcard .fn{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.05em}
+.forkcard .fd{font-size:9px;color:var(--muted);line-height:1.35}
+.forkcard .fp{font-size:12px;color:var(--gold);font-weight:600}
+.forkcard .effrow{margin:2px 0 0;justify-content:center;gap:3px}
+.forkcard .eff{padding:2px 5px;font-size:8px}
+
+.uphead{display:flex;align-items:center;gap:11px;margin-bottom:9px}
+.upname{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:15px;letter-spacing:.04em}
+.upsub{font-size:10.5px;color:var(--muted);line-height:1.4}
+
+/* ---- kontramatris ---- */
+.matrix{display:flex;flex-direction:column;gap:3px;margin-bottom:11px}
+.mr{display:grid;grid-template-columns:78px repeat(4,1fr);gap:3px;align-items:center}
+.mr.head .mh{
+  display:flex;flex-direction:column;align-items:center;font-size:8px;
+  font-family:'Chakra Petch',sans-serif;letter-spacing:.06em;line-height:1.3;
+}
+.mr.head .mh span{opacity:.85}
+.ml{font-family:'Chakra Petch',sans-serif;font-size:9.5px;letter-spacing:.06em}
+.mc{
+  text-align:center;font-size:10px;font-weight:600;padding:5px 0;border-radius:7px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--muted);
+}
+.mc.good{border-color:#1f6b4d;color:var(--green);background:#0e2a22}
+.mc.bad{border-color:#6b1f33;color:var(--coral);background:#2a0e16}
+.mc.mid{color:var(--text)}
+.cilist{display:flex;flex-wrap:wrap;gap:6px}
+.ci{
+  display:flex;align-items:center;gap:5px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:9px;padding:4px 8px;font-size:9.5px;
+}
+.ci b{font-family:'Chakra Petch',sans-serif;font-size:9.5px;letter-spacing:.04em}
+
+.sendbtn .cls{
+  position:absolute;top:3px;left:5px;font-size:9px;opacity:.85;line-height:1;
+}
+.armcard .note{font-size:8.5px;color:var(--muted);line-height:1.3;text-align:center}
+.btn .ico{font-size:14px}
+@media(max-width:520px){.btn .lbl{display:none}}
+
+.armrow{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+@media(max-width:560px){.armrow{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:380px){.armrow{grid-template-columns:repeat(2,1fr)}}
 .armnote{font-size:10.5px;color:var(--muted);line-height:1.5;margin-bottom:10px}
 .armnote b{color:var(--green)}
 .armcard{

@@ -1,8 +1,9 @@
 import {
-  TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, MAPS, ECON,
-  buildCost, sendUpCost, creepIncome, MAX_TOWER_LV,
+  TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, MAPS, ECON, DMG, ARMOR, TYPE_VS,
+  buildCost, sendUpCost, creepIncome, MAX_TOWER_LV, BASE_LEVELS,
+  towerStat, towerFace, needsBranch,
 } from './config.js';
-import { towerDps } from './sim.js';
+import { towerDps, towerDpsVs } from './sim.js';
 
 export const $ = id => document.getElementById(id);
 let H = {};           // handlers från main.js
@@ -17,6 +18,7 @@ export function initUI(handlers) {
   $('pauseBtn').addEventListener('click', () => H.togglePause());
   $('speedBtn').addEventListener('click', () => H.cycleSpeed());
   $('armoryBtn').addEventListener('click', () => openArmory());
+  $('infoBtn').addEventListener('click', () => openInfo());
   $('sheetScrim').addEventListener('click', () => closeSheets());
 
   $('modeCampaign').addEventListener('click', () => showMenu('campaign'));
@@ -57,7 +59,7 @@ export function toast(m) {
   t.textContent = m;
   t.classList.add('show');
   clearTimeout(t._h);
-  t._h = setTimeout(() => t.classList.remove('show'), 1500);
+  t._h = setTimeout(() => t.classList.remove('show'), 1600);
 }
 
 export function banner(title, sub) {
@@ -80,33 +82,68 @@ export function alertTab(which) {
   $(which === 'def' ? 'dotDef' : 'dotAtk').classList.add('on');
 }
 
-/* ============ ikoner ============ */
+/* ============ små byggstenar ============ */
+const dmgChip = key =>
+  `<span class="chip" style="color:${DMG[key].color};border-color:${DMG[key].color}55">${DMG[key].nm}</span>`;
+
+const clsChip = key =>
+  `<span class="chip" style="color:${ARMOR[key].color};border-color:${ARMOR[key].color}55">${ARMOR[key].glyph} ${ARMOR[key].nm}</span>`;
+
+/* Effektivitetsrad: vad tornet gör mot varje pansarklass. */
+function effRow(type, lv, branch) {
+  const face = towerFace(type, lv, branch);
+  const st = towerStat(type, lv, branch);
+  return `<div class="effrow">` + Object.keys(ARMOR).map(cls => {
+    let m = st.trueDmg ? 1 : (TYPE_VS[face.dmg][cls] ?? 1);
+    if (st.airBonus && cls === 'flyg') m *= st.airBonus;
+    const pct = Math.round(m * 100);
+    const tone = pct >= 115 ? 'good' : pct <= 80 ? 'bad' : 'mid';
+    return `<span class="eff ${tone}"><i>${ARMOR[cls].glyph}</i>${ARMOR[cls].nm}<b>${pct}%</b></span>`;
+  }).join('') + `</div>`;
+}
+
 function creepIcon(key, s = 20) {
   const d = CREEPS[key], c = d.color, h = s / 2;
   let inner;
   if (d.shape === 'dart') inner = `<polygon points="${s * .85},${h} ${s * .18},${s * .85} ${s * .35},${h} ${s * .18},${s * .15}" fill="${c}"/>`;
   else if (d.shape === 'tank') inner = `<rect x="${s * .12}" y="${s * .24}" width="${s * .76}" height="${s * .52}" rx="${s * .18}" fill="${c}"/>`;
   else if (d.shape === 'boss') inner = `<polygon points="${h},${s * .06} ${s * .92},${h * .6} ${s * .92},${s * .76} ${h},${s * .96} ${s * .08},${s * .76} ${s * .08},${h * .6}" fill="${c}"/>`;
+  else if (d.shape === 'wing') inner =
+    `<polygon points="${h},${s * .18} ${s * .66},${h} ${h},${s * .82} ${s * .34},${h}" fill="${c}"/>` +
+    `<polygon points="${s * .6},${s * .4} ${s * .98},${s * .22} ${s * .62},${s * .6}" fill="${c}" opacity=".8"/>` +
+    `<polygon points="${s * .4},${s * .4} ${s * .02},${s * .22} ${s * .38},${s * .6}" fill="${c}" opacity=".8"/>`;
   else inner = `<circle cx="${h}" cy="${h}" r="${h * .74}" fill="${c}"/>`;
-  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${inner}<circle cx="${h}" cy="${h}" r="${h * .27}" fill="#0a0d1c"/></svg>`;
+  const core = d.shape === 'wing' ? '' : `<circle cx="${h}" cy="${h}" r="${h * .27}" fill="#0a0d1c"/>`;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${inner}${core}</svg>`;
 }
 
-function towerGlyph(key, s = 34) {
-  const t = TOWERS[key], c = t.color, h = s / 2;
-  const poly = pts => `<polygon points="${pts}" fill="none" stroke="${c}" stroke-width="2.4" stroke-linejoin="round"/>`;
+function towerGlyph(type, size = 34, lv = 0, branch = null) {
+  const face = towerFace(type, lv, branch);
+  const c = face.color, s = size, h = s / 2, R = h * 0.78;
+  const stroke = `fill="none" stroke="${c}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"`;
+  const ring = (n, rot, rIn) => {
+    const p = [];
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 / n) * i + rot;
+      const r = rIn && i % 2 ? R * rIn : R;
+      p.push(`${h + r * Math.cos(a)},${h + r * Math.sin(a)}`);
+    }
+    return `<polygon points="${p.join(' ')}" ${stroke}/>`;
+  };
   let inner = '';
-  if (t.shape === 'tri') inner = poly(`${h},${s * .12} ${s * .88},${s * .85} ${s * .12},${s * .85}`);
-  if (t.shape === 'hex') {
-    const p = []; for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i - Math.PI / 6; p.push(`${h + h * .78 * Math.cos(a)},${h + h * .78 * Math.sin(a)}`); }
-    inner = poly(p.join(' '));
+  switch (face.shape) {
+    case 'tri': inner = `<polygon points="${h},${s * .14} ${s * .86},${s * .84} ${s * .14},${s * .84}" ${stroke}/>`; break;
+    case 'hex': inner = ring(6, -Math.PI / 2); break;
+    case 'dia': inner = `<polygon points="${h},${s * .12} ${s * .88},${h} ${h},${s * .88} ${s * .12},${h}" ${stroke}/>`; break;
+    case 'star': inner = ring(8, -Math.PI / 2, 0.42); break;
+    case 'shard': inner = ring(3, -Math.PI / 2) +
+      `<path d="M${h} ${h} L${h} ${s * .12} M${h} ${h} L${s * .86} ${s * .68} M${h} ${h} L${s * .14} ${s * .68}" ${stroke}/>`; break;
+    case 'flame': inner = `<path d="M${h} ${s * .12} Q${s * .88} ${h * .9} ${h} ${s * .9} Q${s * .12} ${h * .9} ${h} ${s * .12} Z" ${stroke}/>`; break;
+    case 'bolt': inner = `<path d="M${s * .58} ${s * .1} L${s * .3} ${s * .52} L${s * .54} ${s * .52} L${s * .4} ${s * .9}" ${stroke}/>`; break;
+    case 'aa': inner = `<path d="M${s * .36} ${s * .12} L${s * .36} ${s * .68} M${s * .64} ${s * .12} L${s * .64} ${s * .68} M${s * .18} ${s * .74} L${s * .82} ${s * .74}" ${stroke}/>`; break;
+    default: inner = `<path d="M${h} ${s * .1} L${h} ${s * .78} M${s * .18} ${s * .5} L${s * .82} ${s * .5}" ${stroke}/>`;
   }
-  if (t.shape === 'dia') inner = poly(`${h},${s * .1} ${s * .9},${h} ${h},${s * .9} ${s * .1},${h}`);
-  if (t.shape === 'star') {
-    const p = []; for (let i = 0; i < 8; i++) { const a = Math.PI / 4 * i; const r = i % 2 ? h * .35 : h * .82; p.push(`${h + r * Math.cos(a)},${h + r * Math.sin(a)}`); }
-    inner = poly(p.join(' '));
-  }
-  if (t.shape === 'cross') inner = `<path d="M${h} ${s * .1} L${h} ${s * .78} M${s * .18} ${s * .5} L${s * .82} ${s * .5}" stroke="${c}" stroke-width="2.4" stroke-linecap="round" fill="none"/>`;
-  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}"><circle cx="${h}" cy="${h}" r="${h * .15}" fill="${c}"/>${inner}</svg>`;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}"><circle cx="${h}" cy="${h}" r="${h * .14}" fill="${c}"/>${inner}</svg>`;
 }
 
 /* ============ sendbar ============ */
@@ -145,6 +182,13 @@ function attachSendCard(el, key) {
   el.addEventListener('pointerleave', () => { clearTimeout(lp); lp = null; });
 }
 
+/* Långa namn (DRÖNARE ×2) krymper i stället för att klippas på smal skärm. */
+function nameTag(d) {
+  const label = d.nm + (d.count ? ' ×' + d.count : '');
+  const size = label.length > 8 ? ' style="font-size:7.2px"' : '';
+  return `<div class="nm"${size}>${label}</div>`;
+}
+
 export function refreshSendbar() {
   if (!G) return;
   for (const el of document.querySelectorAll('.sendbtn')) {
@@ -153,8 +197,10 @@ export function refreshSendbar() {
     const pips = `<div class="pips">${Array.from({ length: ECON.maxSendLv },
       (_, i) => `<span class="${i < lv ? 'on' : ''}"></span>`).join('')}</div>`;
     el.innerHTML = locked
-      ? `${creepIcon(key)}<div class="nm">${d.nm}</div><div class="lockmsg">🔒 ink ${d.unlock}</div>`
-      : `${creepIcon(key)}<div class="nm">${d.nm}${d.count ? ' ×' + d.count : ''}</div>
+      ? `<div class="cls" style="color:${ARMOR[d.cls].color}">${ARMOR[d.cls].glyph}</div>
+         ${creepIcon(key)}<div class="nm">${d.nm}</div><div class="lockmsg">🔒${d.unlock}</div>`
+      : `<div class="cls" style="color:${ARMOR[d.cls].color}">${ARMOR[d.cls].glyph}</div>
+         ${creepIcon(key)}${nameTag(d)}
          <div class="pr">◆${d.cost}</div><div class="in">+${creepIncome(key)} ink</div>${pips}
          <div class="cdfill"></div><div class="qbadge" style="display:none"></div>`;
     el.classList.toggle('locked', locked);
@@ -181,15 +227,15 @@ export function refreshSendbarState() {
 }
 
 /* ============ sheets ============ */
-const buildSheet = $('buildSheet'), upSheet = $('upSheet'), armorySheet = $('armorySheet');
+const sheets = () => [$('buildSheet'), $('upSheet'), $('armorySheet'), $('infoSheet')];
 
 function openSheet(el) {
-  for (const s of [buildSheet, upSheet, armorySheet]) s.classList.toggle('open', s === el);
+  for (const s of sheets()) s.classList.toggle('open', s === el);
   $('sheetScrim').classList.add('on');
 }
 
 export function closeSheets() {
-  for (const s of [buildSheet, upSheet, armorySheet]) s.classList.remove('open');
+  for (const s of sheets()) s.classList.remove('open');
   $('sheetScrim').classList.remove('on');
   if (G) { G.sel = null; G.buildHint = false; G.previewRange = 0; }
 }
@@ -198,7 +244,7 @@ export function openBuild() {
   const row = $('towrow');
   row.innerHTML = '';
   const n = G.me.board.towers.length;
-  $('buildTax').textContent = n ? `+${Math.round((Math.pow(ECON.buildTax, n) - 1) * 100)}% byggskatt (${n} torn)` : '';
+  $('buildTax').textContent = n ? `+${Math.round((Math.pow(ECON.buildTax, n) - 1) * 100)} % byggskatt (${n} torn)` : '';
   for (const key of TOWER_KEYS) {
     const t = TOWERS[key];
     const cost = buildCost(key, n);
@@ -207,50 +253,87 @@ export function openBuild() {
     el.innerHTML = `${towerGlyph(key)}
       <div class="nm" style="color:${t.color}">${t.name}</div>
       <div class="pr">◆${cost}</div>
+      ${dmgChip(t.dmg)}
       <div class="ds">${t.tag}</div>`;
     el.addEventListener('pointerdown', e => { e.stopPropagation(); H.build(key); });
     el.addEventListener('pointerenter', () => { if (G) G.previewRange = t.lv[0].range; });
     row.appendChild(el);
   }
   G.buildHint = true;
-  openSheet(buildSheet);
+  openSheet($('buildSheet'));
 }
 
 export function openTower(tw) {
-  const def = TOWERS[tw.type];
-  const cur = def.lv[tw.lv], nxt = def.lv[tw.lv + 1];
+  const face = towerFace(tw.type, tw.lv, tw.branch);
+  const cur = towerStat(tw.type, tw.lv, tw.branch);
+  const atFork = needsBranch(tw);
+  const nxt = tw.lv + 1 < MAX_TOWER_LV && !atFork ? towerStat(tw.type, tw.lv + 1, tw.branch) : null;
   const sell = Math.floor(tw.invested * ECON.sellRate);
-  const dpsNow = towerDps(tw.type, tw.lv);
-  const dpsNext = nxt ? towerDps(tw.type, tw.lv + 1) : 0;
-  const stat = (label, a, b, suffix = '') =>
-    `<span>${label} <b>${a}${suffix}</b>${b !== undefined && b !== a ? ` <span class="up">→${b}${suffix}</span>` : ''}</span>`;
+  const dpsNow = towerDps(tw.type, tw.lv, tw.branch);
 
-  upSheet.innerHTML = `<div class="grip"></div>
-  <div style="display:flex;align-items:center;gap:11px;margin-bottom:9px">
-    ${towerGlyph(tw.type, 40)}
+  const stat = (label, a, b, suffix = '') =>
+    `<span>${label} <b>${a}${suffix}</b>${b !== undefined && b !== null && b !== a ? ` <span class="up">→${b}${suffix}</span>` : ''}</span>`;
+
+  let action;
+  if (atFork) {
+    // Grenvalet — det viktigaste beslutet i hela spelet.
+    action = `<div class="forkhead">VÄLJ SPECIALISERING — permanent</div>
+      <div class="forkrow">` + ['a', 'b'].map(br => {
+      const b = TOWERS[tw.type].branches[br];
+      const st = b.lv[0];
+      const poor = G.me.gold < st.cost;
+      return `<div class="forkcard ${poor ? 'poor' : ''}" data-br="${br}">
+        ${towerGlyph(tw.type, 30, BASE_LEVELS, br)}
+        <div class="fn" style="color:${b.color}">${b.name}</div>
+        ${dmgChip(b.dmg)}
+        <div class="fd">${b.tag}</div>
+        <div class="fp">◆${st.cost}</div>
+        ${effRow(tw.type, BASE_LEVELS, br)}
+      </div>`;
+    }).join('') + `</div>`;
+  } else {
+    action = `<div style="display:flex;gap:8px">
+      <button class="btn upgrade ${(!nxt || G.me.gold < nxt.cost) ? 'disabled' : ''}" id="upBtn" style="flex:2">
+        ${nxt ? `UPPGRADERA ◆${nxt.cost}` : 'MAXNIVÅ'}
+      </button>
+      <button class="btn sell" id="sellBtn" style="flex:1">SÄLJ ◆${sell}</button>
+    </div>`;
+  }
+
+  $('upSheet').innerHTML = `<div class="grip"></div>
+  <div class="uphead">
+    ${towerGlyph(tw.type, 40, tw.lv, tw.branch)}
     <div style="flex:1">
-      <div style="font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:15px;color:${def.color}">${def.name}</div>
-      <div style="font-size:11px;color:var(--muted)">Nivå ${tw.lv + 1}/${MAX_TOWER_LV}${nxt ? '' : ' · MAX'} · ${def.desc}</div>
+      <div class="upname" style="color:${face.color}">${face.name}</div>
+      <div class="upsub">Nivå ${tw.lv + 1}/${MAX_TOWER_LV}${nxt || atFork ? '' : ' · MAX'} · ${face.desc}</div>
     </div>
+    ${dmgChip(face.dmg)}
   </div>
   <div class="upstats">
-    ${stat('DPS', dpsNow, nxt ? dpsNext : undefined)}
-    ${stat('SKADA', cur.dmg, nxt ? nxt.dmg : undefined)}
-    ${stat('TAKT', cur.rate, nxt ? nxt.rate : undefined, 's')}
-    ${stat('RÄCKV', cur.range, nxt ? nxt.range : undefined)}
-    ${cur.slow ? stat('SAKTAR', Math.round(cur.slow * 100), nxt ? Math.round(nxt.slow * 100) : undefined, '%') : ''}
-    ${cur.chain ? stat('KEDJA', cur.chain, nxt ? nxt.chain : undefined) : ''}
-    ${cur.splash ? stat('AOE', cur.splash, nxt ? nxt.splash : undefined) : ''}
-    ${cur.pierce ? `<span>PANSARBRYT <b>${Math.round(cur.pierce * 100)}%</b></span>` : ''}
+    ${stat('DPS', dpsNow, nxt ? towerDps(tw.type, tw.lv + 1, tw.branch) : null)}
+    ${stat('SKADA', cur.dmg, nxt ? nxt.dmg : null)}
+    ${stat('TAKT', cur.rate, nxt ? nxt.rate : null, 's')}
+    ${stat('RÄCKV', cur.range, nxt ? nxt.range : null)}
+    ${cur.slow ? stat('SAKTAR', Math.round(cur.slow * 100), nxt && nxt.slow ? Math.round(nxt.slow * 100) : null, '%') : ''}
+    ${cur.chain ? stat('KEDJA', cur.chain, nxt ? nxt.chain : null) : ''}
+    ${cur.multi ? stat('MÅL', cur.multi, nxt ? nxt.multi : null) : ''}
+    ${cur.splash ? stat('AOE', cur.splash, nxt ? nxt.splash : null) : ''}
+    ${cur.burn ? stat('BRAND', cur.burn, nxt ? nxt.burn : null, '/s') : ''}
+    ${cur.airBonus ? `<span>MOT FLYG <b>×${cur.airBonus}</b></span>` : ''}
+    ${cur.trueDmg ? `<span class="up">REN SKADA — inga multiplikatorer</span>` : ''}
   </div>
-  <div style="display:flex;gap:8px">
-    <button class="btn upgrade ${(!nxt || G.me.gold < nxt.cost) ? 'disabled' : ''}" id="upBtn" style="flex:2">
-      ${nxt ? `UPPGRADERA ◆${nxt.cost}` : 'MAXNIVÅ'}
-    </button>
-    <button class="btn sell" id="sellBtn" style="flex:1">SÄLJ ◆${sell}</button>
-  </div>`;
-  openSheet(upSheet);
-  $('upBtn').addEventListener('pointerdown', e => { e.stopPropagation(); H.upgradeTower(tw); });
+  ${cur.trueDmg ? '' : effRow(tw.type, tw.lv, tw.branch)}
+  ${action}
+  ${atFork ? `<button class="btn sell" id="sellBtn" style="width:100%;margin-top:8px">SÄLJ ◆${sell}</button>` : ''}`;
+
+  openSheet($('upSheet'));
+  if (atFork) {
+    for (const card of $('upSheet').querySelectorAll('.forkcard')) {
+      card.addEventListener('pointerdown', e => { e.stopPropagation(); H.upgradeTower(tw, card.dataset.br); });
+    }
+  } else {
+    $('upBtn').addEventListener('pointerdown', e => { e.stopPropagation(); H.upgradeTower(tw); });
+  }
   $('sellBtn').addEventListener('pointerdown', e => { e.stopPropagation(); H.sellTower(tw); });
 }
 
@@ -267,13 +350,47 @@ export function openArmory(focusKey) {
     el.style.outline = focusKey === key ? '1px solid var(--amber)' : '';
     el.innerHTML = `${creepIcon(key, 22)}
       <div class="nm">${d.nm}</div>
+      ${clsChip(d.cls)}
       <div class="lv">${locked ? '🔒 inkomst ' + d.unlock : 'nivå ' + lv + '/' + ECON.maxSendLv}</div>
+      <div class="note">${d.note}</div>
       <div class="pr">${maxed ? 'MAX' : locked ? '—' : '◆' + cost}</div>
       <div class="pips">${Array.from({ length: ECON.maxSendLv }, (_, i) => `<span class="${i < lv ? 'on' : ''}"></span>`).join('')}</div>`;
     if (!maxed && !locked) el.addEventListener('pointerdown', e => { e.stopPropagation(); H.upgradeSend(key); });
     row.appendChild(el);
   }
-  openSheet(armorySheet);
+  openSheet($('armorySheet'));
+}
+
+/* Hela kontramatrisen — utan den är systemet osynligt för spelaren. */
+export function openInfo() {
+  const clsKeys = Object.keys(ARMOR);
+  const head = clsKeys.map(c =>
+    `<div class="mh" style="color:${ARMOR[c].color}">${ARMOR[c].glyph}<span>${ARMOR[c].nm}</span></div>`).join('');
+  const rows = Object.keys(DMG).map(t => {
+    const cells = clsKeys.map(c => {
+      const m = TYPE_VS[t][c];
+      const tone = m >= 1.15 ? 'good' : m <= 0.8 ? 'bad' : 'mid';
+      return `<div class="mc ${tone}">${Math.round(m * 100)}%</div>`;
+    }).join('');
+    return `<div class="mr"><div class="ml" style="color:${DMG[t].color}">${DMG[t].nm}</div>${cells}</div>`;
+  }).join('');
+
+  const creeps = CREEP_KEYS.map(k => {
+    const d = CREEPS[k];
+    return `<div class="ci">${creepIcon(k, 18)}<b>${d.nm}</b>${clsChip(d.cls)}</div>`;
+  }).join('');
+
+  $('infoSheet').innerHTML = `<div class="grip"></div>
+    <h3>Skadetyper mot pansarklasser</h3>
+    <div class="matrix">
+      <div class="mr head"><div class="ml"></div>${head}</div>
+      ${rows}
+    </div>
+    <div class="armnote">Läs raden för att se vad ditt torn är bra mot. Läs kolumnen för
+      att se vad du ska skicka mot motståndarens torn. <b>FLYG</b> följer inte vägen — de
+      går rakt över banan, så ett torn i hörnet hinner aldrig skjuta på dem.</div>
+    <div class="cilist">${creeps}</div>`;
+  openSheet($('infoSheet'));
 }
 
 /* ============ menyer ============ */
