@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="NEXUS WARS — modern line tower wars. Bygg försvar, skicka creeps, möt AI eller riktiga spelare online.">
+<title>NEXUS WARS</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css?v=4">
+</head>
+<body>
+
+<div id="hud">
+  <div class="hgroup">
+    <div class="stat lives" title="Dina liv">🛡<span id="pLives">20</span></div>
+    <div class="stat gold" title="Guld">◆<span id="gold">0</span></div>
+    <div class="stat inc" title="Inkomst per 5 s">+<span id="inc">0</span><i id="incBar"></i></div>
+  </div>
+  <div class="hcenter">
+    <span id="sector">SEKTOR 1</span>
+    <span id="wave">VÅG 1 · 0:00</span>
+  </div>
+  <div class="hgroup right">
+    <div class="stat elives" title="Motståndarens liv"><span id="eLives">20</span>⚔</div>
+  </div>
+</div>
+
+<div id="viewtabs">
+  <div class="vtab def active" id="tabDef">🛡 FÖRSVAR<span class="dot" id="dotDef"></span></div>
+  <div class="vtab atk" id="tabAtk">⚔ ANFALL<span class="dot" id="dotAtk"></span></div>
+</div>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="banner"></div>
+  <div id="toast"></div>
+
+  <!-- ===== startmeny ===== -->
+  <div class="overlay" id="startOv">
+    <div class="logo">NEXUS<span>WARS</span></div>
+    <div class="sub">Bygg torn på din bana. Skicka creeps mot motståndarens.
+      Varje creep du skickar höjer din inkomst permanent — men ger motståndaren
+      guld när den dör. Först till 0 liv förlorar.</div>
+    <div class="modepick">
+      <button class="modebtn" id="modeCampaign">
+        <b>KAMPANJ</b><span>5 sektorer mot WARDEN-AI</span>
+      </button>
+      <button class="modebtn accent" id="modeOnline">
+        <b>ONLINE 1v1</b><span>Möt en riktig spelare</span>
+      </button>
+    </div>
+    <div id="maplist"></div>
+    <div class="hint" id="startHint">Tips: tornen klarar de första vågorna själva — spara guld till uppgraderingar.</div>
+  </div>
+
+  <!-- ===== matchmaking ===== -->
+  <div class="overlay hidden" id="mmOv">
+    <div class="spinner"></div>
+    <h2 id="mmTitle">SÖKER MOTSTÅNDARE</h2>
+    <div class="sub" id="mmSub">Håll fliken öppen…</div>
+    <input id="mmName" maxlength="14" placeholder="DITT NAMN" autocomplete="off" spellcheck="false">
+    <div style="display:flex;gap:10px">
+      <button class="btn primary big" id="mmFind">SÖK MATCH</button>
+      <button class="btn big" id="mmCancel">AVBRYT</button>
+    </div>
+  </div>
+
+  <!-- ===== slut ===== -->
+  <div class="overlay hidden" id="endOv">
+    <h1 id="endTitle">SEGER</h1>
+    <div class="sub" id="endSub"></div>
+    <div id="endStats" class="statgrid"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button class="btn primary big" id="endNext">NÄSTA SEKTOR</button>
+      <button class="btn big" id="endAgain">IGEN</button>
+      <button class="btn big" id="endMenu">MENY</button>
+    </div>
+  </div>
+</div>
+
+<div id="sendbar"></div>
+
+<div id="controls">
+  <button class="btn icon" id="pauseBtn" aria-label="Pausa">❚❚</button>
+  <button class="btn primary" id="viewBtn">VÄXLA VY ⚔</button>
+  <button class="btn" id="armoryBtn">⬆ ARMÉ</button>
+  <button class="btn icon" id="speedBtn">1×</button>
+</div>
+
+<!-- ===== bottensheets ===== -->
+<div class="bsheet" id="buildSheet">
+  <div class="grip"></div>
+  <h3>Bygg torn <span id="buildTax" class="tax"></span></h3>
+  <div class="towrow" id="towrow"></div>
+</div>
+
+<div class="bsheet" id="upSheet"></div>
+
+<div class="bsheet" id="armorySheet">
+  <div class="grip"></div>
+  <h3>Armé — uppgradera dina creeps</h3>
+  <div class="armnote">Varje nivå ger <b>+35 % HP</b> på den typen du skickar. Detta är vad som håller trycket uppe när motståndaren uppgraderar sina torn.</div>
+  <div id="armrow" class="armrow"></div>
+</div>
+
+<div id="sheetScrim"></div>
+
+<script type="module" src="/js/main.js?v=4"></script>
+</body>
+</html>

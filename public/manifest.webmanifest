@@ -1,0 +1,13 @@
+{
+  "name": "NEXUS WARS",
+  "short_name": "Nexus Wars",
+  "description": "Modern line tower wars — bygg försvar, skicka creeps, möt AI eller riktiga spelare.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0a0d1c",
+  "theme_color": "#0a0d1c",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

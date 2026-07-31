@@ -1,0 +1,20 @@
+{
+  "name": "nexus-wars",
+  "version": "0.2.0",
+  "description": "Line tower wars för mobil — bygg försvar, skicka creeps, möt AI eller riktiga spelare online.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  },
+  "license": "MIT",
+  "private": true
+}
