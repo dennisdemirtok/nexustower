@@ -17,7 +17,7 @@ function makeSide(name, cfg) {
     name, gold: ECON.startGold, income: ECON.startIncome,
     sendLv: Object.fromEntries(CREEP_KEYS.map(k => [k, 0])),
     pendingSend: [], sent: 0, leaked: 0,
-    board: makeBoard(M.wp, M.w),
+    board: makeBoard(M),
   };
   initAI(s, cfg, s.board);
   return s;

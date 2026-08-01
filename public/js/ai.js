@@ -3,7 +3,8 @@ import {
   buildCost, sendUpCost, creepIncome, towerStat, needsBranch,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
-import { scoreSpots } from './board.js';
+import { canBuild, lengthIfBuilt, rebuildSolid, routeCells, distAt } from './board.js';
+import { COLS, ROWS } from './config.js';
 
 /* ============================================================
    WARDEN — datormotståndaren.
@@ -15,7 +16,6 @@ import { scoreSpots } from './board.js';
 export function initAI(side, cfg, board) {
   side.cfg = cfg;
   side.think = 1.5;
-  side.spots = scoreSpots(board);
   side.pref = pickBuildOrder(cfg);
   side.seen = { latt: 0, tung: 0, pans: 0, flyg: 0 };
 }
@@ -83,12 +83,62 @@ export function aiThink(G, dt) {
   else spendOnOffense(A);
 }
 
+/* Hitta rutan som förlänger creepsens väg mest utan att stänga den.
+   Bara rutor intill den nuvarande rutten kan påverka den, så vi slipper
+   testa hela fältet. */
+function bestMazeSpot(b, iq) {
+  const route = routeCells(b);
+  const seen = new Set();
+  const cands = [];
+  for (const [rx, ry] of route) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = rx + dx, y = ry + dy;
+        const key = x + ',' + y;
+        if (x < 0 || y < 0 || x >= COLS || y >= ROWS || seen.has(key)) continue;
+        seen.add(key);
+        if (b.solid.has(key)) continue;
+        if (x === b.entry[0] && y === b.entry[1]) continue;
+        if (x === b.exit[0] && y === b.exit[1]) continue;
+        cands.push([x, y]);
+      }
+    }
+  }
+  let best = null, bestLen = b.pathLen;
+  for (const [x, y] of cands) {
+    const len = lengthIfBuilt(b, x, y);
+    if (len > bestLen) { bestLen = len; best = [x, y]; }
+  }
+  // Sämre AI tar inte alltid det bästa draget.
+  if (best && Math.random() > iq * 0.7 + 0.3 && cands.length) {
+    const alt = cands[Math.floor(Math.random() * cands.length)];
+    if (lengthIfBuilt(b, alt[0], alt[1]) > b.pathLen) return alt;
+  }
+  return best;
+}
+
 function spendOnDefense(A, wave, prof) {
   const b = A.board;
   const cfg = A.cfg;
-  const targetCount = Math.min(13, 3 + Math.floor(wave * 0.8));
+  const wallCost = buildCost('wall', b.towers.length);
 
-  // Uppgraderingar värderas mot hotbilden, inte mot rå DPS.
+  /* 1) Bygg labyrint. Så länge vägen är kortare än måttet är det alltid
+     bättre att förlänga den än att köpa mer eldkraft — creepsen hinner
+     helt enkelt inte bli beskjutna nog. */
+  if (b.pathLen < cfg.mazeTarget && A.gold >= wallCost) {
+    const spot = bestMazeSpot(b, cfg.iq);
+    if (spot && canBuild(b, spot[0], spot[1]).ok) {
+      A.gold -= wallCost;
+      b.towers.push({
+        type: 'wall', cx: spot[0], cy: spot[1], lv: 0, branch: null,
+        cd: 0, recoil: 0, invested: wallCost, angle: -1.57, flash: 0,
+      });
+      rebuildSolid(b);
+      return;
+    }
+  }
+
+  /* 2) Uppgradera det som ger mest mot den faktiska hotbilden. */
   const cands = [];
   for (const t of b.towers) {
     if (t.lv + 1 >= MAX_TOWER_LV) continue;
@@ -102,22 +152,27 @@ function spendOnDefense(A, wave, prof) {
   }
   cands.sort((a, z) => z.value - a.value);
 
-  const wantsMore = b.towers.length < targetCount;
+  /* 3) Nya skadetorn — helst nära rutten där de faktiskt får skjuta. */
+  const wantsMore = b.towers.filter(t => t.type !== 'wall').length < Math.min(14, 3 + Math.floor(wave * 0.8));
   if (wantsMore && (!cands.length || Math.random() < 0.5)) {
-    // Välj tornsort som passar hotbilden, med lite slump för smak.
-    const options = TOWER_KEYS
+    const options = TOWER_KEYS.filter(k => k !== 'wall')
       .map(k => ({ k, cost: buildCost(k, b.towers.length), v: valueAgainst(k, 0, null, prof) }))
       .filter(o => A.gold >= o.cost)
       .sort((a, z) => z.v / z.cost - a.v / a.cost);
     if (options.length) {
       const pick = Math.random() < cfg.iq ? options[0] : options[Math.floor(Math.random() * options.length)];
-      const spot = A.spots.find(s => !b.towers.some(t => t.cx === s.x && t.cy === s.y));
-      if (spot) {
+      const route = routeCells(b);
+      for (let tries = 0; tries < 24; tries++) {
+        const [rx, ry] = route[Math.floor(Math.random() * route.length)];
+        const x = rx + Math.round(Math.random() * 2 - 1);
+        const y = ry + Math.round(Math.random() * 2 - 1);
+        if (!canBuild(b, x, y).ok) continue;
         A.gold -= pick.cost;
         b.towers.push({
-          type: pick.k, cx: spot.x, cy: spot.y, lv: 0, branch: null,
-          cd: 0, invested: pick.cost, angle: -1.57, flash: 0,
+          type: pick.k, cx: x, cy: y, lv: 0, branch: null,
+          cd: 0, recoil: 0, invested: pick.cost, angle: -1.57, flash: 0,
         });
+        rebuildSolid(b);
         return;
       }
     }

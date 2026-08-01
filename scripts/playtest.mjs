@@ -11,7 +11,7 @@ import {
   MAPS, ECON, CREEPS, CREEP_KEYS, TOWER_KEYS, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, creepIncome, sendUpCost, towerStat, needsBranch, waveHpMul,
 } from '../public/js/config.js';
-import { makeBoard, scoreSpots } from '../public/js/board.js';
+import { makeBoard, canBuild, rebuildSolid, lengthIfBuilt, routeCells } from '../public/js/board.js';
 import { spawn, stepBoard, towerDps, towerDpsVs } from '../public/js/sim.js';
 import { initAI, aiThink, aiNoteIncoming } from '../public/js/ai.js';
 
@@ -20,9 +20,9 @@ const style = process.argv[3] || 'balanced';
 const M = MAPS[mapIndex];
 
 const STYLES = {
-  balanced: { sendShare: 0.5, towerTarget: 8, reserve: 400 },
-  rusher:   { sendShare: 0.75, towerTarget: 5, reserve: 200 },
-  turtle:   { sendShare: 0.25, towerTarget: 11, reserve: 800 },
+  balanced: { sendShare: 0.5, towerTarget: 8, reserve: 400, mazeTarget: 40 },
+  rusher:   { sendShare: 0.75, towerTarget: 5, reserve: 200, mazeTarget: 26 },
+  turtle:   { sendShare: 0.25, towerTarget: 11, reserve: 800, mazeTarget: 55 },
 };
 const S = STYLES[style] || STYLES.balanced;
 
@@ -30,12 +30,11 @@ function makeSide(name) {
   return {
     name, gold: ECON.startGold, income: ECON.startIncome,
     sendLv: Object.fromEntries(CREEP_KEYS.map(k => [k, 0])),
-    pendingSend: [], sent: 0, leaked: 0, board: makeBoard(M.wp, M.w),
+    pendingSend: [], sent: 0, leaked: 0, board: makeBoard(M),
   };
 }
 
 const P = makeSide('SPELARE(' + style + ')');
-P.spots = scoreSpots(P.board);
 P.seen = { latt: 0, tung: 0, pans: 0, flyg: 0 };
 const A = makeSide('WARDEN(' + M.ai.nm + ')');
 initAI(A, M.ai, A.board);
@@ -65,20 +64,47 @@ function playerTurn(dt, wave) {
   const prof = profile();
   const b = P.board;
 
-  // 1) Har jag för få torn? Bygg det som passar hotbilden bäst.
-  if (b.towers.length < S.towerTarget) {
-    const opts = TOWER_KEYS
+  // 1) Bygg labyrint tills vägen är lagom lång — det är öppningen i LTW.
+  const wallCost = buildCost('wall', b.towers.length);
+  if (b.pathLen < S.mazeTarget && P.gold >= wallCost) {
+    const route = routeCells(b);
+    let best = null, bestLen = b.pathLen;
+    const seen = new Set();
+    for (const [rx, ry] of route) {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const x = rx + dx, y = ry + dy, k = x + ',' + y;
+        if (seen.has(k)) continue; seen.add(k);
+        if (!canBuild(b, x, y).ok) continue;
+        const len = lengthIfBuilt(b, x, y);
+        if (len > bestLen) { bestLen = len; best = [x, y]; }
+      }
+    }
+    if (best) {
+      P.gold -= wallCost;
+      b.towers.push({ type: 'wall', cx: best[0], cy: best[1], lv: 0, branch: null,
+        cd: 0, invested: wallCost, angle: -1.57, flash: 0 });
+      rebuildSolid(b);
+      return;
+    }
+  }
+
+  // 2) Skadetorn längs rutten
+  const gunCount = b.towers.filter(t => t.type !== 'wall').length;
+  if (gunCount < S.towerTarget) {
+    const opts = TOWER_KEYS.filter(k => k !== 'wall')
       .map(k => ({ k, cost: buildCost(k, b.towers.length), v: valueOf(k, 0, null, prof) }))
       .filter(o => P.gold >= o.cost)
       .sort((x, z) => z.v / z.cost - x.v / x.cost);
     if (opts.length) {
-      const spot = P.spots.find(s => !b.towers.some(t => t.cx === s.x && t.cy === s.y));
-      if (spot) {
+      const route = routeCells(b);
+      for (let i = 0; i < 30; i++) {
+        const [rx, ry] = route[Math.floor(Math.random() * route.length)];
+        const x = rx + Math.round(Math.random() * 2 - 1), y = ry + Math.round(Math.random() * 2 - 1);
+        if (!canBuild(b, x, y).ok) continue;
         P.gold -= opts[0].cost;
-        b.towers.push({
-          type: opts[0].k, cx: spot.x, cy: spot.y, lv: 0, branch: null,
-          cd: 0, invested: opts[0].cost, angle: -1.57, flash: 0,
-        });
+        b.towers.push({ type: opts[0].k, cx: x, cy: y, lv: 0, branch: null,
+          cd: 0, invested: opts[0].cost, angle: -1.57, flash: 0 });
+        rebuildSolid(b);
         return;
       }
     }

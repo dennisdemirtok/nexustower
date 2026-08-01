@@ -1,5 +1,5 @@
 import { COLS, ROWS, CREEPS, ARMOR, towerFace, towerStat } from './config.js';
-import { pPos, cPos } from './board.js';
+import { cPos, routeCells } from './board.js';
 
 /* ============================================================
    Rendering.
@@ -246,77 +246,59 @@ function drawGrid(b, s, G) {
   for (let y = 0; y <= ROWS; y++) { CX.moveTo(ox, oy + y * cell); CX.lineTo(ox + COLS * cell, oy + y * cell); }
   CX.stroke();
 
-  // Byggbara rutor markeras — extra tydligt när byggmenyn är öppen.
-  const hi = G && G.buildHint;
-  for (const key of b.buildable) {
+  // Klippor: fasta hinder man varken kan bygga på eller gå igenom.
+  for (const key of b.rock) {
     const [x, y] = key.split(',').map(Number);
-    if (hi) {
-      CX.fillStyle = 'rgba(79,216,235,.07)';
-      const p = cell * 0.1;
-      roundRect(ox + x * cell + p, oy + y * cell + p, cell - 2 * p, cell - 2 * p, cell * 0.16);
-      CX.fill();
+    CX.fillStyle = 'rgba(60,70,110,.85)';
+    roundRect(ox + x * cell + cell * 0.08, oy + y * cell + cell * 0.08,
+              cell * 0.84, cell * 0.84, cell * 0.2);
+    CX.fill();
+    CX.strokeStyle = 'rgba(140,160,220,.35)';
+    CX.lineWidth = 1;
+    CX.stroke();
+  }
+
+  // Lediga rutor. Under bygge lyser de upp så man ser var labyrinten kan växa.
+  const hi = G && G.buildHint;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (b.solid.has(x + ',' + y)) continue;
+      if (hi) {
+        CX.fillStyle = 'rgba(79,216,235,.06)';
+        const p = cell * 0.1;
+        roundRect(ox + x * cell + p, oy + y * cell + p, cell - 2 * p, cell - 2 * p, cell * 0.16);
+        CX.fill();
+      }
+      CX.fillStyle = hi ? 'rgba(160,190,255,.3)' : 'rgba(120,135,200,.16)';
+      CX.beginPath(); CX.arc(gx(s, x), gy(s, y), cell * 0.04, 0, 7); CX.fill();
     }
-    CX.fillStyle = hi ? 'rgba(160,190,255,.35)' : 'rgba(120,135,200,.20)';
-    CX.beginPath(); CX.arc(gx(s, x), gy(s, y), cell * 0.045, 0, 7); CX.fill();
   }
 }
 
-/* Korridoren ritas som ett brett fält, inte som en linje. Det är hela
-   skillnaden mot en vanlig tower defense: creepsen har en gata att gå på
-   och tornen står tätt längs båda sidorna. */
+/* Rutten creepsen faktiskt tar just nu. Det är den man bygger om — utan
+   den syns inte labyrinten man skapat. */
 function drawPath(b, s, hostile, time) {
-  const { cell, ox, oy } = s;
+  const { cell } = s;
   const rgb = hostile ? '255,93,115' : '255,180,84';
+  const route = routeCells(b);
 
-  // 1) själva gatan — mörkare än marken, med en varm ton
-  for (const key of b.cells) {
-    const [x, y] = key.split(',').map(Number);
-    CX.fillStyle = 'rgba(10,13,28,.55)';
-    CX.fillRect(ox + x * cell, oy + y * cell, cell + 0.5, cell + 0.5);
-    CX.fillStyle = `rgba(${rgb},.10)`;
-    CX.fillRect(ox + x * cell, oy + y * cell, cell + 0.5, cell + 0.5);
+  if (route.length > 1) {
+    CX.lineJoin = 'round'; CX.lineCap = 'round';
+    const trace = () => {
+      CX.beginPath();
+      CX.moveTo(gx(s, route[0][0]), gy(s, route[0][1]));
+      for (let i = 1; i < route.length; i++) CX.lineTo(gx(s, route[i][0]), gy(s, route[i][1]));
+    };
+    trace(); CX.strokeStyle = `rgba(${rgb},.07)`; CX.lineWidth = cell * 0.7; CX.stroke();
+    trace(); CX.strokeStyle = `rgba(${rgb},.22)`; CX.lineWidth = 2.5; CX.stroke();
+    trace();
+    CX.strokeStyle = `rgba(${rgb},.75)`;
+    CX.lineWidth = 2;
+    CX.setLineDash([cell * 0.16, cell * 0.42]);
+    CX.lineDashOffset = -time * cell * 2.2;
+    CX.stroke();
+    CX.setLineDash([]);
   }
-
-  // 2) kantlinje bara där gatan möter byggbar mark
-  CX.strokeStyle = `rgba(${rgb},.5)`;
-  CX.lineWidth = 2;
-  CX.beginPath();
-  for (const key of b.cells) {
-    const [x, y] = key.split(',').map(Number);
-    const X0 = ox + x * cell, Y0 = oy + y * cell;
-    if (!b.cells.has((x - 1) + ',' + y)) { CX.moveTo(X0, Y0); CX.lineTo(X0, Y0 + cell); }
-    if (!b.cells.has((x + 1) + ',' + y)) { CX.moveTo(X0 + cell, Y0); CX.lineTo(X0 + cell, Y0 + cell); }
-    if (!b.cells.has(x + ',' + (y - 1))) { CX.moveTo(X0, Y0); CX.lineTo(X0 + cell, Y0); }
-    if (!b.cells.has(x + ',' + (y + 1))) { CX.moveTo(X0, Y0 + cell); CX.lineTo(X0 + cell, Y0 + cell); }
-  }
-  CX.stroke();
-
-  // 3) mittlinje som visar färdriktningen
-  CX.lineJoin = 'round'; CX.lineCap = 'round';
-  CX.beginPath();
-  CX.moveTo(gx(s, b.wp[0][0]), gy(s, b.wp[0][1]));
-  for (let i = 1; i < b.wp.length; i++) CX.lineTo(gx(s, b.wp[i][0]), gy(s, b.wp[i][1]));
-  CX.strokeStyle = `rgba(${rgb},.3)`;
-  CX.lineWidth = 2;
-  CX.setLineDash([cell * 0.18, cell * 0.5]);
-  CX.lineDashOffset = -time * cell * 1.6;
-  CX.stroke();
-  CX.setLineDash([]);
-
-  // Energiprickar som rinner längs banan i creepsens färdriktning.
-  CX.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 5; i++) {
-    const t = ((time * 3.2 + i * (b.len / 5)) % b.len);
-    const p = pPos(b, t);
-    const a = 0.5 * (0.5 + 0.5 * Math.sin(time * 4 + i));
-    CX.globalAlpha = a;
-    CX.fillStyle = `rgb(${rgb})`;
-    CX.beginPath();
-    CX.arc(gx(s, p.x), gy(s, p.y), cell * 0.05, 0, 7);
-    CX.fill();
-  }
-  CX.globalAlpha = 1;
-  CX.globalCompositeOperation = 'source-over';
 
   // Luftkorridoren visas bara när det faktiskt flyger något där.
   if (b.creeps.some(c => c.fly && c.t >= 0)) {
@@ -332,9 +314,8 @@ function drawPath(b, s, hostile, time) {
     CX.restore();
   }
 
-  const en = pPos(b, 0), ex = pPos(b, b.len);
-  portal(gx(s, en.x), gy(s, en.y), hostile ? '#ff5d73' : '#ffb454', cell, time, false);
-  portal(gx(s, ex.x), gy(s, ex.y), hostile ? '#4fd8eb' : '#ff5d73', cell, time, true);
+  portal(gx(s, b.entry[0]), gy(s, b.entry[1]), hostile ? '#ff5d73' : '#ffb454', cell, time, false);
+  portal(gx(s, b.exit[0]), gy(s, b.exit[1]), hostile ? '#4fd8eb' : '#ff5d73', cell, time, true);
 }
 
 function portal(x, y, color, cell, time, isCore) {
@@ -523,6 +504,11 @@ function shapePath(shape, hg) {
       CX.moveTo(-hg * 0.28, -hg); CX.lineTo(-hg * 0.28, hg * 0.5);
       CX.moveTo(hg * 0.28, -hg); CX.lineTo(hg * 0.28, hg * 0.5);
       CX.moveTo(-hg * 0.7, hg * 0.55); CX.lineTo(hg * 0.7, hg * 0.55);
+      break;
+    case 'block':
+      CX.moveTo(-hg * 0.8, -hg * 0.5); CX.lineTo(hg * 0.8, -hg * 0.5);
+      CX.lineTo(hg * 0.8, hg * 0.5); CX.lineTo(-hg * 0.8, hg * 0.5); CX.closePath();
+      CX.moveTo(-hg * 0.8, 0); CX.lineTo(hg * 0.8, 0);
       break;
     case 'cross':
     default:

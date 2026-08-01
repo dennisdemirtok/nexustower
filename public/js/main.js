@@ -2,7 +2,7 @@ import {
   MAPS, TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, sendUpCost, creepIncome, waveHpMul, towerStat, towerFace, needsBranch,
 } from './config.js';
-import { makeBoard, towerAt } from './board.js';
+import { makeBoard, towerAt, canBuild, rebuildSolid } from './board.js';
 import { spawn, stepBoard, stepRemote, addFx, addFloat, addParts } from './sim.js';
 import { initAI, aiThink, aiNoteIncoming } from './ai.js';
 import * as R from './render.js';
@@ -40,8 +40,8 @@ function newMatch({ mode, mapIndex, foeName }) {
     me: makeSide('DU'),
     foe: makeSide(foeName || M.ai.nm),
   };
-  G.me.board = makeBoard(M.wp, M.w);
-  G.foe.board = makeBoard(M.wp, M.w);
+  G.me.board = makeBoard(M);
+  G.foe.board = makeBoard(M);
 
   if (mode === 'campaign') initAI(G.foe, M.ai, G.foe.board);
   else { G.foe.board.remote = true; G.foe.board._map = new Map(); }
@@ -226,11 +226,15 @@ function build(key) {
   const b = G.me.board;
   const cost = buildCost(key, b.towers.length);
   if (G.me.gold < cost) { UI.toast('För lite guld'); Audio.sfx.denied(); return; }
+  // Labyrintregeln: du får aldrig stänga vägen helt.
+  const check = canBuild(b, G.sel.cx, G.sel.cy);
+  if (!check.ok) { UI.toast(check.why); Audio.sfx.denied(); return; }
   G.me.gold -= cost;
   b.towers.push({
     type: key, cx: G.sel.cx, cy: G.sel.cy, lv: 0, branch: null,
     cd: 0, recoil: 0, invested: cost, angle: -1.57, flash: 0,
   });
+  rebuildSolid(b);
   Audio.sfx.build();
   Audio.buzz(12);
   addFx(b, 'ring', G.sel.cx, G.sel.cy, TOWERS[key].color, 1.2);
@@ -261,6 +265,7 @@ function upgradeTower(tw, branch) {
 function sellTower(tw) {
   G.me.gold += Math.floor(tw.invested * ECON.sellRate);
   G.me.board.towers = G.me.board.towers.filter(t => t !== tw);
+  rebuildSolid(G.me.board);
   Audio.sfx.sell();
   UI.closeSheets();
   UI.toast('Torn sålt');
@@ -333,8 +338,8 @@ function snapshot() {
     l: b.lives,
     tw: b.towers.map(t => [TOWER_KEYS.indexOf(t.type), t.cx, t.cy, t.lv, t.branch === 'b' ? 1 : 0]),
     cr: b.creeps.filter(c => c.t >= 0).map(c => [
-      c.id, CREEP_KEYS.indexOf(c.type), +c.t.toFixed(2),
-      +(c.hp / c.maxHp).toFixed(2), c.lv, c.slow > 0 ? 1 : 0,
+      c.id, CREEP_KEYS.indexOf(c.type), +c.x.toFixed(2), +c.y.toFixed(2),
+      +(c.hp / c.maxHp).toFixed(2), c.lv, c.slow > 0 ? 1 : 0, +c.t.toFixed(2),
     ]),
   };
 }
@@ -348,17 +353,19 @@ function applySnapshot(s) {
     branch: a[3] >= BASE_LEVELS ? (a[4] ? 'b' : 'a') : null,
     cd: 0, invested: 0, angle: -1.57, flash: 0,
   }));
+  rebuildSolid(b);
   const map = new Map(b.creeps.map(c => [c.id, c]));
   const seen = new Set();
   for (const a of s.cr) {
-    const [id, ti, t, frac, lv, slow] = a;
+    const [id, ti, px, py, frac, lv, slow, t] = a;
     seen.add(id);
     let c = map.get(id);
     if (!c) {
       const type = CREEP_KEYS[ti];
       const d = CREEPS[type];
       c = {
-        id, type, lv, t, hp: frac, maxHp: 1, spd: d.spd, slow: 0, slowT: 0,
+        id, type, lv, t, x: px, y: py, jx: 0, jy: 0,
+        hp: frac, maxHp: 1, spd: d.spd, slow: 0, slowT: 0,
         r: d.r, cls: d.cls, fly: !!d.fly, regen: 0, bounty: 0, leak: d.leak,
         burn: 0, burnT: 0,
         wob: Math.random() * 6.28, bob: Math.random() * 6.28, flash: 0, dead: false,
@@ -366,7 +373,10 @@ function applySnapshot(s) {
       b.creeps.push(c);
     }
     // mjuk korrigering så extrapoleringen inte hackar
-    c.t = Math.abs(c.t - t) > 1.5 ? t : c.t + (t - c.t) * 0.55;
+    const far = Math.hypot(px - c.x, py - c.y) > 1.5;
+    c.x = far ? px : c.x + (px - c.x) * 0.55;
+    c.y = far ? py : c.y + (py - c.y) * 0.55;
+    c.t = t;
     c.hp = frac;
     c.slow = slow ? 0.45 : 0;
     c.lv = lv;

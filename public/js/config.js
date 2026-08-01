@@ -3,8 +3,9 @@
    All tuning bor här. Rör inget annat för att ändra känslan.
    ============================================================ */
 
-export const COLS = 9;
-export const ROWS = 14;
+/* Fältet är större nu — labyrinten behöver plats att slingra på. */
+export const COLS = 11;
+export const ROWS = 16;
 
 /* ---------- ekonomi ----------
    Grundproblemet i v1: varje skickad creep gav +1 inkomst för 8 guld,
@@ -27,7 +28,10 @@ export const ECON = {
 
   sendCooldown: 1.0,     // sekunder mellan sändningar (kön hanterar resten)
   queueMax: 6,
-  buildTax: 1.05,        // varje torn du äger gör nästa torn 5% dyrare
+  /* Ingen byggskatt längre. I en labyrint SKA man spamma billiga
+     byggnader — det är så man ritar vägen. En skatt som gjorde det 7 gånger
+     dyrare vid 40 torn hade dödat hela mekaniken. Guldet är gränsen. */
+  buildTax: 1.0,
   waveInterval: 30,      // sekunder mellan HP-vågor
   waveHp: 1.26,          // HP-multiplikator per våg
   maxSendLv: 5,
@@ -42,7 +46,9 @@ export const ECON = {
   lifeSteal: true,
   maxLives: 60,
 
-  sellRate: 0.75,
+  /* Högt återköp: labyrinten ska byggas om under matchens gång.
+     "Spamma grundbyggnader, sälj dem senare" är standardöppningen i LTW. */
+  sellRate: 0.85,
 };
 
 /* ============================================================
@@ -85,31 +91,43 @@ export const dmgMul = (type, cls) => (TYPE_VS[type] && TYPE_VS[type][cls]) ?? 1;
    Creepsen sprider ut sig över hela bredden; allt utanför går att bygga på.
    Svårighetsordningen följer korridorens längd — lång korridor betyder mer
    tid i eldzonen, alltså starkare försvar och lättare bana.               */
+const rocks = (...runs) => runs.flat();
+const row = (y, x0, x1) => { const o = []; for (let x = x0; x <= x1; x++) o.push([x, y]); return o; };
+const col = (x, y0, y1) => { const o = []; for (let y = y0; y <= y1; y++) o.push([x, y]); return o; };
+
+/* ---------- banor ----------
+   Öppet fält. entry = där creepsen kommer in, exit = din nexus.
+   rock = fasta hinder du inte kan bygga på och som formar fältet.
+   Resten ritar du själv med torn.                                       */
 export const MAPS = [
   {
-    name: 'SERPENTINEN', short: 'Lång korridor, gott om tid', w: 3,
-    ai: { nm: 'WARDEN-1', iq: 0.45, aggr: 0.35, tick: 1.5, bank: 0.30 },
-    wp: [[1,0],[1,4],[7,4],[7,8],[1,8],[1,13]],
+    name: 'ÖPPNA FÄLTET', short: 'Inga hinder — din labyrint, dina regler',
+    ai: { nm: 'WARDEN-1', iq: 0.45, aggr: 0.35, tick: 1.5, bank: 0.30, mazeTarget: 34 },
+    entry: [5, 0], exit: [5, 15], rock: [],
   },
   {
-    name: 'TRAPPAN', short: 'Fyra avsatser', w: 3,
-    ai: { nm: 'WARDEN-2', iq: 0.6, aggr: 0.45, tick: 1.3, bank: 0.33 },
-    wp: [[1,0],[1,3],[4,3],[4,6],[7,6],[7,9],[4,9],[4,13]],
+    name: 'PELARNA', short: 'Fem klippor att bygga runt',
+    ai: { nm: 'WARDEN-2', iq: 0.6, aggr: 0.45, tick: 1.3, bank: 0.33, mazeTarget: 40 },
+    entry: [5, 0], exit: [5, 15],
+    rock: [[2, 4], [8, 4], [5, 8], [2, 12], [8, 12]],
   },
   {
-    name: 'KROKEN', short: 'Två skarpa vändningar', w: 3,
-    ai: { nm: 'HELIX', iq: 0.78, aggr: 0.55, tick: 1.1, bank: 0.37 },
-    wp: [[4,0],[4,4],[1,4],[1,9],[7,9],[7,13]],
+    name: 'KLYFTAN', short: 'En mur tvärs över med ett enda hål',
+    ai: { nm: 'HELIX', iq: 0.78, aggr: 0.55, tick: 1.1, bank: 0.37, mazeTarget: 46 },
+    entry: [5, 0], exit: [5, 15],
+    rock: rocks(row(8, 0, 3), row(8, 7, 10)),
   },
   {
-    name: 'VINKELN', short: 'Kort — svårt att hinna', w: 3,
-    ai: { nm: 'RAZOR', iq: 0.9, aggr: 0.6, tick: 0.9, bank: 0.42 },
-    wp: [[2,0],[2,7],[7,7],[7,13]],
+    name: 'TRÅNGA PASSET', short: 'Smalt fält — mindre plats att slingra',
+    ai: { nm: 'RAZOR', iq: 0.9, aggr: 0.6, tick: 0.9, bank: 0.42, mazeTarget: 40 },
+    entry: [5, 0], exit: [5, 15],
+    rock: rocks(col(0, 3, 12), col(10, 3, 12)),
   },
   {
-    name: 'GATLOPPET', short: 'Bred gata, kort sträcka', w: 4,
-    ai: { nm: 'OMEGA', iq: 1.0, aggr: 0.55, tick: 0.75, bank: 0.48 },
-    wp: [[6,0],[6,6],[2,6],[2,13]],
+    name: 'SPILLRORNA', short: 'Utspridda klippor i vägen',
+    ai: { nm: 'OMEGA', iq: 1.0, aggr: 0.55, tick: 0.75, bank: 0.48, mazeTarget: 44 },
+    entry: [5, 0], exit: [5, 15],
+    rock: [[1, 2], [9, 3], [3, 5], [7, 6], [2, 9], [8, 10], [4, 12], [6, 13], [5, 4], [5, 11]],
   },
 ];
 
@@ -121,6 +139,42 @@ export const MAPS = [
    Totalt: 3 gemensamma + 3 i vald gren = 6 nivåer per torn.
    ============================================================ */
 export const TOWERS = {
+  /* Labyrintmaterialet. Nästan ingen skada — poängen är att den kostar
+     nästan ingenting och att du kan sälja tillbaka 85 %. Det är den du
+     spammar för att rita vägen creepsen tvingas gå. */
+  wall: {
+    name: 'PALISAD', color: '#8a93b8', shape: 'block', dmg: 'kin',
+    tag: 'Billig · bygger labyrinten',
+    desc: 'Spärr med en nypa skada. Bygg många, sälj och bygg om.',
+    lv: [
+      { cost: 40, dmg: 5, rate: 1.2, range: 1.5 },
+      { cost: 70, dmg: 12, rate: 1.1, range: 1.6 },
+      { cost: 120, dmg: 26, rate: 1.0, range: 1.7 },
+    ],
+    branches: {
+      a: {
+        name: 'BASTION', color: '#b8c2e8', shape: 'block', dmg: 'kin',
+        tag: 'Tålig spärr med lite tyngd',
+        desc: 'Fortfarande billig, men börjar faktiskt göra skada.',
+        lv: [
+          { cost: 240, dmg: 58, rate: 0.95, range: 1.9 },
+          { cost: 420, dmg: 125, rate: 0.9, range: 2.0 },
+          { cost: 760, dmg: 270, rate: 0.85, range: 2.1 },
+        ],
+      },
+      b: {
+        name: 'TULL', color: '#3ddc97', shape: 'block', dmg: 'kry',
+        tag: 'Saktar allt som passerar',
+        desc: 'Ingen skada att tala om — men bromsar i hela labyrinten.',
+        lv: [
+          { cost: 220, dmg: 14, rate: 0.8, range: 2.0, slow: 0.30, slowT: 1.4 },
+          { cost: 380, dmg: 30, rate: 0.75, range: 2.1, slow: 0.36, slowT: 1.6 },
+          { cost: 680, dmg: 64, rate: 0.7, range: 2.2, slow: 0.42, slowT: 1.8 },
+        ],
+      },
+    },
+  },
+
   pulse: {
     name: 'PULS', color: '#4fd8eb', shape: 'tri', dmg: 'kin',
     tag: 'Enkelmål · snabb',

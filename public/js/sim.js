@@ -1,5 +1,6 @@
 import { CREEPS, sendHpMul, towerStat, towerFace, dmgMul } from './config.js';
-import { cPos, routeLen, laneSpread } from './board.js';
+import { cPos, nextStep, progress, distAt } from './board.js';
+import { COLS, ROWS } from './config.js';
 
 const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
 
@@ -13,8 +14,12 @@ export function spawn(b, type, wave, lv = 0, hpMulExtra = 1) {
     b.creeps.push({
       id: ++SEQ,
       type, lv, cls: d.cls, fly: !!d.fly,
-      // egen bana i sidled genom korridoren
-      off: d.fly ? 0 : (Math.random() * 2 - 1) * laneSpread(b, d.r),
+      /* Marktrupper har egna koordinater och följer flödesfältet.
+         Jittret gör att de inte går exakt i samma spår. */
+      x: b.entry[0] + (Math.random() - 0.5) * 0.5,
+      y: b.entry[1],
+      jx: (Math.random() - 0.5) * 0.34,
+      jy: (Math.random() - 0.5) * 0.34,
       t: -i * 0.5 - Math.random() * 0.3,
       hp, maxHp: hp,
       spd: d.spd, slow: 0, slowT: 0, r: d.r,
@@ -99,7 +104,7 @@ function targetsInRange(b, tw, st, max) {
     if (dist2(tw.cx, tw.cy, p.x, p.y) <= r2) found.push({ c, p });
   }
   // Den som hunnit längst är farligast — skjut på den först.
-  found.sort((a, z) => (z.c.t / routeLen(b, z.c)) - (a.c.t / routeLen(b, a.c)));
+  found.sort((a, z) => progress(b, z.c) - progress(b, a.c));
   return found.slice(0, max);
 }
 
@@ -218,8 +223,36 @@ function stepCreeps(b, dt, hooks) {
     if (c.regen && c.hp < c.maxHp) c.hp = Math.min(c.maxHp, c.hp + c.regen * dt);
     c.wob += dt * 6;
     c.bob += dt * 2.4;
-    c.t += c.spd * (1 - c.slow) * dt;
-    if (c.t >= routeLen(b, c)) {
+
+    /* t < 0 är utsläppsfördröjning så en grupp inte spawnar ovanpå varandra.
+       Gäller båda sorterna; flygande använder t även som färdsträcka sedan. */
+    if (c.t < 0) { c.t += dt; continue; }
+
+    const step = c.spd * (1 - c.slow) * dt;
+    let arrived = false;
+
+    if (c.fly) {
+      c.t += step;
+      arrived = c.t >= b.air.len;
+    } else {
+      /* Följ flödesfältet: gå mot grannrutan med kortast väg till målet.
+         Byggs ett torn räknas fältet om och creepen svänger av sig själv. */
+      const cx = Math.max(0, Math.min(COLS - 1, Math.round(c.x)));
+      const cy = Math.max(0, Math.min(ROWS - 1, Math.round(c.y)));
+      if (cx === b.exit[0] && cy === b.exit[1]) {
+        arrived = true;
+      } else {
+        const n = nextStep(b, cx, cy);
+        const tx = (n ? n.x : b.exit[0]) + c.jx;
+        const ty = (n ? n.y : b.exit[1]) + c.jy;
+        const dx = tx - c.x, dy = ty - c.y;
+        const d = Math.hypot(dx, dy);
+        if (d <= step || d < 0.02) { c.x = tx; c.y = ty; }
+        else { c.x += dx / d * step; c.y += dy / d * step; }
+      }
+    }
+
+    if (arrived) {
       c.dead = true;
       leaked += c.leak;
       b.shake = 1;
@@ -263,7 +296,19 @@ export function stepBoard(b, dt, hooks = {}) {
 /* Fjärrbana (multiplayer): vi simulerar inte, vi extrapolerar mellan
    snapshots så det ser levande ut i stället för att hacka i 6 fps. */
 export function stepRemote(b, dt) {
-  for (const c of b.creeps) { c.t += c.spd * (1 - c.slow) * dt; c.bob += dt * 2.4; c.wob += dt * 6; }
+  for (const c of b.creeps) {
+    const step = c.spd * (1 - c.slow) * dt;
+    if (c.fly) { c.t += step; continue; }
+    const cx = Math.max(0, Math.min(COLS - 1, Math.round(c.x)));
+    const cy = Math.max(0, Math.min(ROWS - 1, Math.round(c.y)));
+    const n = nextStep(b, cx, cy);
+    if (n) {
+      const dx = n.x - c.x, dy = n.y - c.y;
+      const d = Math.hypot(dx, dy) || 1;
+      c.x += dx / d * step; c.y += dy / d * step;
+    }
+    c.bob += dt * 2.4; c.wob += dt * 6;
+  }
   stepFx(b, dt);
 }
 
