@@ -31,7 +31,11 @@ export const ECON = {
      60/tick ger 240 i minuten: fyra torn ELLER tolv får, eller en blandning. */
   startIncome: 60,
   incInterval: 15,
-  incomeRate: 0.07,   // planens egen spak för kortare matcher (payback 3,5 min)
+  /* 20 %, taget ur den riktiga WC3-skärmbilden: får 5 guld ger +1 inkomst.
+     Sifferplanen gissade 5 % och jag höjde till 7 % — men mätt mot förlagan
+     var vi nästan tre gånger för snåla, och det är därför öppningen kändes
+     som att stå och vänta. Återbetalning: 5 ticks = 75 sekunder. */
+  incomeRate: 0.20,
   bountyRate: 0.04,
 
   /* Ingen kö-gräns. Har du sparat ihop guldet ska du kunna trycka tjugo
@@ -325,7 +329,7 @@ export const CREEPS = {
   // ---- T1, från start ----
   far: {
     nm: 'FÅR', shape: 'blob', color: '#e8e2d0', cls: 'latt', sprite: 'swarm',
-    hp: 30, spd: 1.6, r: 0.20, cost: 20, leak: 1, unlockMin: 0,
+    hp: 30, spd: 1.6, r: 0.20, cost: 25, leak: 1, unlockMin: 0,
     note: 'Basen. Billigast vägen till inkomst.',
   },
   varg: {
