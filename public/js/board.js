@@ -18,7 +18,7 @@ export function makeBoard(wp) {
   }
   const b = {
     wp, cells, pts, len: pts.length - 1,
-    towers: [], creeps: [], shots: [], bolts: [], fx: [], floats: [],
+    towers: [], creeps: [], shots: [], bolts: [], fx: [], floats: [], parts: [],
     lives: ECON.lives, maxLives: ECON.lives,
     shake: 0, hurt: 0, remote: false,
   };

@@ -76,27 +76,30 @@ export const dmgMul = (type, cls) => (TYPE_VS[type] && TYPE_VS[type][cls]) ?? 1;
 export const MAPS = [
   {
     name: 'ORMEN', short: 'Lång slingrande bana',
-    ai: { nm: 'WARDEN-1', iq: 0.45, aggr: 0.35, tick: 1.5, bank: 0.35 },
+    ai: { nm: 'WARDEN-1', iq: 0.45, aggr: 0.35, tick: 1.5, bank: 0.30 },
     wp: [[0,1],[7,1],[7,4],[1,4],[1,7],[7,7],[7,10],[1,10],[1,13]],
   },
+  /* Ordningen är vald efter banlängd: lång bana = starkt försvar = lättare.
+     SPIRALEN har 44 rutor väg, SICKSACK 30, GATLOPPET bara 13. Tillsammans
+     med AI-konfigurationerna ger det en ramp som faktiskt känns. */
   {
-    name: 'SICKSACK', short: 'Tätare svängar',
-    ai: { nm: 'WARDEN-2', iq: 0.6, aggr: 0.45, tick: 1.3, bank: 0.3 },
-    wp: [[0,2],[6,2],[6,5],[2,5],[2,8],[6,8],[6,11],[0,11]],
-  },
-  {
-    name: 'SPIRALEN', short: 'Spiral mot mitten',
-    ai: { nm: 'HELIX', iq: 0.75, aggr: 0.55, tick: 1.1, bank: 0.28 },
+    name: 'SPIRALEN', short: 'Lång spiral mot mitten',
+    ai: { nm: 'WARDEN-2', iq: 0.6, aggr: 0.45, tick: 1.3, bank: 0.33 },
     wp: [[0,0],[8,0],[8,13],[0,13],[0,3],[5,3],[5,10],[2,10],[2,6]],
   },
   {
+    name: 'SICKSACK', short: 'Tätare svängar',
+    ai: { nm: 'HELIX', iq: 0.78, aggr: 0.55, tick: 1.1, bank: 0.37 },
+    wp: [[0,2],[6,2],[6,5],[2,5],[2,8],[6,8],[6,11],[0,11]],
+  },
+  {
     name: 'KORSELDEN', short: 'Kort — svårt att hinna',
-    ai: { nm: 'RAZOR', iq: 0.88, aggr: 0.65, tick: 0.95, bank: 0.25 },
+    ai: { nm: 'RAZOR', iq: 0.9, aggr: 0.6, tick: 0.9, bank: 0.42 },
     wp: [[0,3],[5,3],[5,7],[8,7],[8,11],[2,11],[2,13]],
   },
   {
     name: 'GATLOPPET', short: 'Extremt kort bana',
-    ai: { nm: 'OMEGA', iq: 1.0, aggr: 0.8, tick: 0.8, bank: 0.22 },
+    ai: { nm: 'OMEGA', iq: 1.0, aggr: 0.55, tick: 0.75, bank: 0.48 },
     wp: [[0,5],[4,5],[4,10],[8,10]],
   },
 ];

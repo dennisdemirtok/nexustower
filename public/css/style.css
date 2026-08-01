@@ -43,6 +43,13 @@ button,input{font-family:inherit;color:inherit}
   display:block;position:absolute;left:0;bottom:-4px;height:2px;
   background:var(--green);opacity:.55;border-radius:2px;width:0;
 }
+.hbtn{
+  background:none;border:1px solid var(--line);border-radius:9px;
+  padding:3px 6px;font-size:12px;cursor:pointer;line-height:1;opacity:.8;
+  transition:opacity .15s,border-color .15s;
+}
+.hbtn:active{transform:scale(.92)}
+.hbtn.off{opacity:.4;border-color:transparent}
 #sector{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:var(--muted)}
 #wave{font-size:9.5px;letter-spacing:.08em;color:#5f688f}
 

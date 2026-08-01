@@ -4,6 +4,7 @@ import {
   towerStat, towerFace, needsBranch,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
+import * as Audio from './audio.js';
 
 export const $ = id => document.getElementById(id);
 let H = {};           // handlers från main.js
@@ -20,6 +21,20 @@ export function initUI(handlers) {
   $('armoryBtn').addEventListener('click', () => openArmory());
   $('infoBtn').addEventListener('click', () => openInfo());
   $('sheetScrim').addEventListener('click', () => closeSheets());
+
+  const sb = $('soundBtn');
+  const paintSound = () => {
+    sb.textContent = Audio.isEnabled() ? '🔊' : '🔇';
+    sb.classList.toggle('off', !Audio.isEnabled());
+  };
+  sb.addEventListener('click', () => {
+    Audio.unlock();
+    Audio.setEnabled(!Audio.isEnabled());
+    if (Audio.isEnabled() && G && !G.over) Audio.startMusic();
+    paintSound();
+    Audio.sfx.ui();
+  });
+  paintSound();
 
   $('modeCampaign').addEventListener('click', () => showMenu('campaign'));
   $('modeOnline').addEventListener('click', () => showMenu('online'));
@@ -234,8 +249,10 @@ export function refreshSendbarState() {
 const sheets = () => [$('buildSheet'), $('upSheet'), $('armorySheet'), $('infoSheet')];
 
 function openSheet(el) {
+  const wasOpen = el.classList.contains('open');
   for (const s of sheets()) s.classList.toggle('open', s === el);
   $('sheetScrim').classList.add('on');
+  if (!wasOpen) Audio.sfx.ui();
 }
 
 export function closeSheets() {

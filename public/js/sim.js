@@ -45,6 +45,7 @@ export function damage(b, c, amount, st, hooks) {
     c.dead = true;
     const p = cPos(b, c);
     addFx(b, 'boom', p.x, p.y, CREEPS[c.type].color, 0.55 + c.r);
+    addParts(b, p.x, p.y, c.r > 0.3 ? 12 : 7, CREEPS[c.type].color, 2.6 + c.r * 3);
     if (hooks.onKill) hooks.onKill(c, p);
   }
   return dealt;
@@ -53,6 +54,25 @@ export function damage(b, c, amount, st, hooks) {
 export function addFx(b, k, x, y, color, r) {
   const life = k === 'boom' ? 0.42 : k === 'ring' ? 0.5 : 0.24;
   b.fx.push({ k, x, y, color, life, max: life, r: r || 0.5 });
+}
+
+/* Spillror. Rutkoordinater som allt annat, med lite gravitation så de
+   faller ner mot banan i stället för att sväva bort. */
+export function addParts(b, x, y, n, color, spread = 2.2, life = 0.5) {
+  if (b.parts.length > 220) return;      // tak så mobilen inte kvävs
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = spread * (0.3 + Math.random() * 0.7);
+    b.parts.push({
+      x, y,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s - 0.6,
+      life: life * (0.6 + Math.random() * 0.6),
+      max: life,
+      size: 0.5 + Math.random(),
+      color,
+    });
+  }
 }
 
 export function addFloat(b, x, y, text, color) {
@@ -94,6 +114,8 @@ function fire(b, tw, dt, hooks) {
   tw.angle = Math.atan2(first.p.y - tw.cy, first.p.x - tw.cx);
   tw.cd = st.rate;
   tw.flash = 1;
+  tw.recoil = 1;
+  if (hooks.onFire) hooks.onFire(st);
 
   if (st.chain) {
     const hits = [first.c];
@@ -131,6 +153,7 @@ function fire(b, tw, dt, hooks) {
 
 function impact(b, s, tp, hooks) {
   const st = s.st;
+  if (hooks.onImpact) hooks.onImpact(st);
   if (st.splash) {
     const aoe = st.splash;
     for (const c of b.creeps) {
@@ -142,11 +165,13 @@ function impact(b, s, tp, hooks) {
       }
     }
     addFx(b, 'boom', tp.x, tp.y, st.color, st.splash);
+    addParts(b, tp.x, tp.y, 9, st.color, 3.2 * st.splash, 0.42);
     return;
   }
   damage(b, s.target, st.dmg, st, hooks);
   applyOnHit(s.target, st);
   addFx(b, 'spark', tp.x, tp.y, st.color);
+  addParts(b, tp.x, tp.y, 3, st.color, 1.6, 0.26);
 }
 
 function applyOnHit(c, st) {
@@ -199,6 +224,7 @@ function stepCreeps(b, dt, hooks) {
       b.hurt = 1;
       const p = cPos(b, c);
       addFx(b, 'ring', p.x, p.y, '#ff5d73', 1.2);
+      addParts(b, p.x, p.y, 16, '#ff5d73', 4, 0.7);
     }
   }
   b.creeps = b.creeps.filter(c => !c.dead);
@@ -208,6 +234,15 @@ function stepCreeps(b, dt, hooks) {
 function stepFx(b, dt) {
   b.shake = Math.max(0, b.shake - dt * 3);
   b.hurt = Math.max(0, b.hurt - dt * 2);
+  for (const tw of b.towers) if (tw.recoil > 0) tw.recoil = Math.max(0, tw.recoil - dt * 9);
+  for (const p of b.parts) {
+    p.life -= dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += dt * 4.5;                 // gravitation
+    p.vx *= 1 - dt * 2.2;             // luftmotstånd
+  }
+  b.parts = b.parts.filter(p => p.life > 0);
   for (const f of b.fx) f.life -= dt;
   b.fx = b.fx.filter(f => f.life > 0);
   for (const bo of b.bolts) bo.life -= dt;

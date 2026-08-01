@@ -3,11 +3,12 @@ import {
   buildCost, sendUpCost, creepIncome, waveHpMul, towerStat, towerFace, needsBranch,
 } from './config.js';
 import { makeBoard, towerAt } from './board.js';
-import { spawn, stepBoard, stepRemote, addFx, addFloat } from './sim.js';
+import { spawn, stepBoard, stepRemote, addFx, addFloat, addParts } from './sim.js';
 import { initAI, aiThink, aiNoteIncoming } from './ai.js';
 import * as R from './render.js';
 import * as UI from './ui.js';
 import * as Net from './net.js';
+import * as Audio from './audio.js';
 
 const CV = document.getElementById('cv');
 let G = null;
@@ -56,6 +57,8 @@ function newMatch({ mode, mapIndex, foeName }) {
   UI.banner(mode === 'campaign' ? `SEKTOR ${mapIndex + 1}` : 'MATCH', `${M.name} · ${G.foe.name}`);
   snapT = 0;
   R.resize();
+  Audio.unlock();
+  Audio.startMusic();
 }
 
 const waveMul = () => waveHpMul(G.wave);
@@ -73,6 +76,7 @@ function update(dt) {
     G.me.gold += G.me.income;
     G.foe.gold += G.foe.income;
     UI.pop('gold');
+    Audio.sfx.income();
   }
 
   // våg: allt nytt blir hårdare, oavsett vem som skickar
@@ -81,6 +85,7 @@ function update(dt) {
     G.waveT += ECON.waveInterval;
     G.wave++;
     UI.banner('VÅG ' + (G.wave + 1), `Alla nya creeps +${Math.round((ECON.waveHp - 1) * 100)} % HP`);
+    Audio.sfx.wave(G.wave);
   }
 
   // min sändkö
@@ -95,9 +100,11 @@ function update(dt) {
       G.foe.sent++;
       UI.alertTab('def');
     }
+    // Fiendens bana hörs svagare — annars blir det dubbelt så mycket ljud.
     stepBoard(G.foe.board, dt, {
-      onKill: c => { G.foe.gold += c.bounty; },
+      onKill: c => { G.foe.gold += c.bounty; Audio.sfx.death(0.35); },
       onLeak: n => hurtFoe(n),
+      onFire: st => Audio.sfx.shoot(st.dmgType, 0.3),
     });
   } else {
     stepRemote(G.foe.board, dt);
@@ -108,15 +115,30 @@ function update(dt) {
       G.me.gold += c.bounty;
       G.me.kills++;
       addFloat(G.me.board, p.x, p.y, '+' + c.bounty, '#ffd166');
+      Audio.sfx.death();
     },
     onLeak: n => hurtMe(n),
+    onFire: st => Audio.sfx.shoot(st.dmgType),
+    onImpact: st => { if (st.splash) Audio.sfx.boom(st.splash); },
   });
+
+  // Musiken tätnar när det faktiskt brinner på din bana.
+  audioT -= dt;
+  if (audioT <= 0) {
+    audioT = 0.5;
+    const threat = G.me.board.creeps.reduce((s, c) => s + c.hp, 0);
+    const lifeLoss = 1 - G.me.board.lives / G.me.board.maxLives;
+    Audio.setIntensity(Math.min(1, threat / 4000 + lifeLoss * 0.7));
+  }
 }
+let audioT = 0;
 
 function hurtMe(n) {
   if (G.over) return;
   G.me.board.lives -= n;
   UI.alertTab('def');
+  Audio.sfx.leak();
+  Audio.buzz([28, 40, 28]);
   if (G.me.board.lives <= 0) {
     G.me.board.lives = 0;
     if (G.mode === 'online') Net.send({ t: 'lose' });
@@ -163,9 +185,11 @@ function processQueue() {
 function send(key) {
   if (!G || G.over) return;
   const d = CREEPS[key];
-  if (G.me.income < d.unlock) { UI.toast(`Låses upp vid inkomst ${d.unlock}`); return; }
-  if (G.me.queue.length >= ECON.queueMax) { UI.toast('Kön är full'); return; }
+  if (G.me.income < d.unlock) { UI.toast(`Låses upp vid inkomst ${d.unlock}`); Audio.sfx.denied(); return; }
+  if (G.me.queue.length >= ECON.queueMax) { UI.toast('Kön är full'); Audio.sfx.denied(); return; }
   G.me.queue.push(key);
+  Audio.sfx.send();
+  Audio.buzz(8);
   processQueue();
   UI.refreshSendbarState();
 }
@@ -175,9 +199,10 @@ function upgradeSend(key) {
   const lv = G.me.sendLv[key];
   if (lv >= ECON.maxSendLv) return;
   const cost = sendUpCost(key, lv);
-  if (G.me.gold < cost) { UI.toast('För lite guld'); return; }
+  if (G.me.gold < cost) { UI.toast('För lite guld'); Audio.sfx.denied(); return; }
   G.me.gold -= cost;
   G.me.sendLv[key]++;
+  Audio.sfx.upgrade();
   UI.toast(`${CREEPS[key].nm} → nivå ${G.me.sendLv[key]} (+${Math.round(ECON.sendUpHp * 100)} % HP)`);
   UI.openArmory(key);
   UI.refreshSendbar();
@@ -187,12 +212,14 @@ function build(key) {
   if (!G || !G.sel || G.sel.tower) return;
   const b = G.me.board;
   const cost = buildCost(key, b.towers.length);
-  if (G.me.gold < cost) { UI.toast('För lite guld'); return; }
+  if (G.me.gold < cost) { UI.toast('För lite guld'); Audio.sfx.denied(); return; }
   G.me.gold -= cost;
   b.towers.push({
     type: key, cx: G.sel.cx, cy: G.sel.cy, lv: 0, branch: null,
-    cd: 0, invested: cost, angle: -1.57, flash: 0,
+    cd: 0, recoil: 0, invested: cost, angle: -1.57, flash: 0,
   });
+  Audio.sfx.build();
+  Audio.buzz(12);
   addFx(b, 'ring', G.sel.cx, G.sel.cy, TOWERS[key].color, 1.2);
   UI.closeSheets();
   UI.updateHUD();
@@ -204,14 +231,16 @@ function upgradeTower(tw, branch) {
   if (needsBranch(tw) && !branch) return;
   const useBranch = tw.lv + 1 >= BASE_LEVELS ? (branch || tw.branch || 'a') : null;
   const nxt = towerStat(tw.type, tw.lv + 1, useBranch);
-  if (!nxt || G.me.gold < nxt.cost) { UI.toast('För lite guld'); return; }
+  if (!nxt || G.me.gold < nxt.cost) { UI.toast('För lite guld'); Audio.sfx.denied(); return; }
   G.me.gold -= nxt.cost;
   tw.lv++;
   if (useBranch) tw.branch = useBranch;
   tw.invested += nxt.cost;
   const face = towerFace(tw.type, tw.lv, tw.branch);
   addFx(G.me.board, 'ring', tw.cx, tw.cy, face.color, 1.4);
-  if (branch) UI.banner(face.name, face.tag);
+  addParts(G.me.board, tw.cx, tw.cy, branch ? 18 : 8, face.color, branch ? 3.5 : 2);
+  if (branch) { UI.banner(face.name, face.tag); Audio.sfx.branch(); Audio.buzz([14, 30, 14]); }
+  else { Audio.sfx.upgrade(); Audio.buzz(10); }
   UI.openTower(tw);
   UI.updateHUD();
 }
@@ -219,6 +248,7 @@ function upgradeTower(tw, branch) {
 function sellTower(tw) {
   G.me.gold += Math.floor(tw.invested * ECON.sellRate);
   G.me.board.towers = G.me.board.towers.filter(t => t !== tw);
+  Audio.sfx.sell();
   UI.closeSheets();
   UI.toast('Torn sålt');
   UI.updateHUD();
@@ -238,7 +268,8 @@ function togglePause() {
   const b = document.getElementById('pauseBtn');
   b.textContent = G.paused ? '▶' : '❚❚';
   b.classList.toggle('active', G.paused);
-  if (G.paused) UI.banner('PAUSAT', '');
+  if (G.paused) { UI.banner('PAUSAT', ''); Audio.stopMusic(); }
+  else Audio.startMusic();
 }
 
 function cycleSpeed() {
@@ -255,6 +286,8 @@ function cycleSpeed() {
 function endMatch(win) {
   if (G.over) return;
   G.over = true;
+  Audio.stopMusic();
+  if (win) Audio.sfx.win(); else Audio.sfx.lose();
   const cleared = UI.loadCleared();
   if (win && G.mode === 'campaign') {
     cleared.add(G.mapIndex);
@@ -367,6 +400,7 @@ function cancelMatch() { Net.send({ t: 'cancel' }); }
 
 function leave() {
   if (G && G.mode === 'online') Net.send({ t: 'leave' });
+  Audio.stopMusic();
   G = null;
   UI.setState(null);
 }
@@ -409,6 +443,8 @@ window.addEventListener('resize', () => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && G && !G.over && G.mode === 'campaign' && !G.paused) togglePause();
+  if (document.hidden) Audio.stopMusic();
+  else if (G && !G.over && !G.paused) Audio.startMusic();
 });
 
 /* ============================================================
@@ -451,6 +487,10 @@ UI.initUI({
     newMatch({ mode: 'campaign', mapIndex: G.mapIndex });
   },
 });
+
+/* Ljud får bara startas från en riktig användargest. Vi hakar på den
+   allra första och släpper sedan lyssnaren. */
+document.addEventListener('pointerdown', () => Audio.unlock(), { capture: true, once: true });
 
 /* iOS Safari struntar i user-scalable=no. Utan det här zoomar sidan när man
    trycker snabbt flera gånger i sendbaren, vilket är exakt vad man gör. */

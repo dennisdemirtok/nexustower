@@ -82,6 +82,35 @@ permanent — det är där partiet avgörs.
 Totalt alltså **5 torn × 2 grenar = 10 sluttorn**, och 6 nivåer var.
 Creeps har dessutom 5 arménivåer var (+35 % HP per nivå).
 
+## Ljud
+
+Allt syntetiseras med WebAudio — inga ljudfiler, så spelet laddar direkt även
+på mobildata. **Varje skadetyp har sin egen klangfärg**, så man hör vad som
+skjuter utan att titta: KINETISK klickar, SPRÄNG dunkar, TERMISK väser uppåt,
+KRYO ringer, ELEKTRISK zappar, SIKTAD smäller till.
+
+Musiken är generativ ambient: bas på ett och fem, pad-ackord som skiftar var
+åttonde takt, och glesa melodistänk. Den **tätnar när det brinner** — täthet
+och percussion styrs av hur mycket HP som är på din bana och hur mycket liv du
+förlorat. Musiken går ner igen när du fått kontroll.
+
+Ljudet startar först vid din första skärmtryckning (webbläsarkrav) och kan
+stängas av med högtalarikonen uppe till höger. Valet sparas.
+
+Det finns ett rösttak på ~14 skottljud per sekund. Utan det blir tolv torn som
+skjuter samtidigt till ett grötigt brus.
+
+## Grafik
+
+- Parallaxstjärnor i två lager plus mjuka färgmoln som andas
+- Additivt ljuslager för skott, blixtar, gnistor och spillror — det som ger
+  bloom-känslan utan en riktig post-process-pipeline
+- Spillror med gravitation och luftmotstånd när creeps dör
+- Rekyl och mynningsflamma på tornen, glödrand när ett torn är maxat
+- Energiprickar som rinner längs banan i creepsens färdriktning
+- Vinjett och scanlines (cachade som mönster, inte 270 fillRect per bildruta)
+- Haptik på mobil: kort vibration vid bygge, längre vid läckage
+
 ## Så är projektet uppbyggt
 
 ```
@@ -112,10 +141,18 @@ att en modifierad klient kan fuska — ett problem först när det finns ranking
 ## Balansera spelet
 
 ```bash
-node scripts/balance.mjs          # bana 1
-node scripts/balance.mjs 3        # bana 4
-node scripts/balance.mjs 0 4 0    # OMEGA mot WARDEN-1 på bana 1
+node scripts/balance.mjs             # AI mot AI, bana 1
+node scripts/balance.mjs 3           # bana 4
+node scripts/playtest.mjs 0 balanced # en människoliknande spelare mot AI
+node scripts/playtest.mjs 0 turtle   # bygg brett och passivt — ska förlora
+node scripts/playtest.mjs 0 rusher   # skicka hårt tidigt
 ```
+
+`balance.mjs` visar att systemet är internt konsekvent. `playtest.mjs` visar om
+det är *roligt*: den spelar som en vettig men inte perfekt människa och testar
+tre strategier. En frisk balans ska ge att **turtle förlorar** — bygger man
+brett i stället för djupt når man aldrig grenvalet, och då tar creepsen slut på
+en. Kör flera gånger per bana; AI:n har slump och enskilda körningar är brusiga.
 
 Skriptet kör två AI mot varandra och skriver ut liv, guld, inkomst, antal torn
 och DPS var 30:e sekund. En frisk match ska:

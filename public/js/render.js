@@ -11,6 +11,7 @@ import { pPos, cPos } from './board.js';
 let CV, CX, DPR = 1;
 export const L = { mode: 'single', w: 0, h: 0, me: null, foe: null };
 let stars = [];
+let nebulae = [];
 
 export function initRender(canvas) {
   CV = canvas;
@@ -29,6 +30,7 @@ export function resize() {
   CV.style.width = w + 'px';
   CV.style.height = h + 'px';
   L.w = w; L.h = h;
+  vignette = null;   // byggs om vid nästa bildruta i den nya storleken
 
   const dual = w >= 880 && w / h > 1.15;
   L.mode = dual ? 'dual' : 'single';
@@ -49,8 +51,19 @@ export function resize() {
   }
 
   if (!stars.length) {
-    for (let i = 0; i < 90; i++) {
-      stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.3 + 0.3, a: Math.random() * 0.5 + 0.1 });
+    // Två lager: det bakre driver långsammare och ger djup.
+    for (let i = 0; i < 70; i++) {
+      stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 0.9 + 0.25, a: Math.random() * 0.28 + 0.06, layer: 0 });
+    }
+    for (let i = 0; i < 34; i++) {
+      stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.5 + 0.7, a: Math.random() * 0.45 + 0.2, layer: 1 });
+    }
+    for (let i = 0; i < 3; i++) {
+      nebulae.push({
+        x: Math.random(), y: Math.random(),
+        r: 0.35 + Math.random() * 0.3,
+        c: ['79,216,235', '167,139,250', '255,93,115'][i],
+      });
     }
   }
 }
@@ -87,23 +100,68 @@ export function drawFrame(G) {
       hostile ? '⚔ ' + G.foe.name + ' — dina creeps anfaller här' : '🛡 DIN BANA — bygg försvar här',
       hostile ? '#ff5d73' : '#4fd8eb', hostile ? G.foe.board : G.me.board);
   }
+  drawPost();
 }
 
 function drawBackdrop(time) {
   const { w, h } = L;
   const g = CX.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, '#0e1226');
-  g.addColorStop(1, '#080a16');
+  g.addColorStop(1, '#070914');
   CX.fillStyle = g;
   CX.fillRect(0, 0, w, h);
+
+  // Mjuka färgmoln som andas — ger djup utan att stjäla uppmärksamhet.
+  for (let i = 0; i < nebulae.length; i++) {
+    const n = nebulae[i];
+    const pulse = 0.85 + 0.15 * Math.sin(time * 0.22 + i * 2.1);
+    const R = n.r * Math.max(w, h) * pulse;
+    const grd = CX.createRadialGradient(n.x * w, n.y * h, 0, n.x * w, n.y * h, R);
+    grd.addColorStop(0, `rgba(${n.c},0.055)`);
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    CX.fillStyle = grd;
+    CX.fillRect(0, 0, w, h);
+  }
+
   CX.fillStyle = '#ffffff';
   for (const s of stars) {
-    CX.globalAlpha = s.a * (0.6 + 0.4 * Math.sin(time * 0.8 + s.x * 40));
+    // Parallax: främre lagret driver dubbelt så fort.
+    const drift = (time * (s.layer ? 5.5 : 2.2)) % (h + 40);
+    const y = ((s.y * h + drift) % (h + 40)) - 20;
+    CX.globalAlpha = s.a * (0.65 + 0.35 * Math.sin(time * 0.9 + s.x * 40));
     CX.beginPath();
-    CX.arc(s.x * w, s.y * h, s.r, 0, 7);
+    CX.arc(s.x * w, y, s.r, 0, 7);
     CX.fill();
   }
   CX.globalAlpha = 1;
+}
+
+/* Vinjett + fina scanlines. Läggs sist och gör bilden mindre "webbsida".
+   Både gradienten och linjemönstret cachas — annars blev det 270 fillRect
+   per bildruta, vilket märks på en billig telefon. */
+let vignette = null, scanPattern = null;
+
+function buildPost() {
+  const { w, h } = L;
+  vignette = CX.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.78);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.42)');
+
+  const tile = document.createElement('canvas');
+  tile.width = 1; tile.height = 3;
+  const tc = tile.getContext('2d');
+  tc.fillStyle = 'rgba(143,166,255,0.05)';
+  tc.fillRect(0, 0, 1, 1);
+  scanPattern = CX.createPattern(tile, 'repeat');
+}
+
+function drawPost() {
+  const { w, h } = L;
+  if (!vignette) buildPost();
+  CX.fillStyle = vignette;
+  CX.fillRect(0, 0, w, h);
+  CX.fillStyle = scanPattern;
+  CX.fillRect(0, 0, w, h);
 }
 
 function drawDivider() {
@@ -149,9 +207,14 @@ function drawBoard(G, b, s, hostile, ctx) {
   for (const tw of b.towers) drawTower(tw, s, hostile, ctx.time);
   cacheCreepPositions(b, s);
   for (const c of b.creeps) { if (c.t >= 0) drawCreep(c, s, ctx.time); }
+  // Additivt lager: skott, blixtar, gnistor och spillror lyser upp varandra
+  // i stället för att måla över. Det är det som ger "bloom"-känslan.
+  CX.globalCompositeOperation = 'lighter';
   for (const sh of b.shots) drawShot(sh, s);
   for (const bo of b.bolts) drawBolt(bo, s);
+  for (const p of b.parts) drawPart(p, s);
   for (const f of b.fx) drawFx(f, s);
+  CX.globalCompositeOperation = 'source-over';
   for (const f of b.floats) drawFloat(f, s);
 
   if (b.hurt > 0) {
@@ -206,6 +269,21 @@ function drawPath(b, s, hostile, time) {
   CX.lineDashOffset = -time * cell * 1.6;
   CX.stroke();
   CX.setLineDash([]);
+
+  // Energiprickar som rinner längs banan i creepsens färdriktning.
+  CX.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 5; i++) {
+    const t = ((time * 3.2 + i * (b.len / 5)) % b.len);
+    const p = pPos(b, t);
+    const a = 0.5 * (0.5 + 0.5 * Math.sin(time * 4 + i));
+    CX.globalAlpha = a;
+    CX.fillStyle = `rgb(${rgb})`;
+    CX.beginPath();
+    CX.arc(gx(s, p.x), gy(s, p.y), cell * 0.05, 0, 7);
+    CX.fill();
+  }
+  CX.globalAlpha = 1;
+  CX.globalCompositeOperation = 'source-over';
 
   // Luftkorridoren visas bara när det faktiskt flyger något där.
   if (b.creeps.some(c => c.fly && c.t >= 0)) {
@@ -283,38 +361,50 @@ function drawTower(tw, s, hostile, time) {
   const x = gx(s, tw.cx), y = gy(s, tw.cy), size = cell * 0.78;
   const maxed = tw.lv >= 5;
 
-  // sockel med fasad kant
-  const g = CX.createLinearGradient(x, y - size / 2, x, y + size / 2);
-  if (hostile) { g.addColorStop(0, '#2c1934'); g.addColorStop(1, '#160c1a'); }
-  else { g.addColorStop(0, '#232c54'); g.addColorStop(1, '#131931'); }
-  CX.fillStyle = g;
-  CX.strokeStyle = hostile ? 'rgba(255,93,115,.3)' : 'rgba(130,150,235,.34)';
-  CX.lineWidth = 1.2;
-  roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
-  CX.fill(); CX.stroke();
-
-  // svag inre glöd i tornets skadetypsfärg
-  const glow = CX.createRadialGradient(x, y, 0, x, y, size * 0.55);
-  glow.addColorStop(0, face.color + '2a');
-  glow.addColorStop(1, 'rgba(0,0,0,0)');
-  CX.fillStyle = glow;
-  roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
+  // Skuggplatta under sockeln ger tornet tyngd mot bakgrunden.
+  CX.fillStyle = 'rgba(0,0,0,.35)';
+  roundRect(x - size / 2 + 1.5, y - size / 2 + 2.5, size, size, size * 0.26);
   CX.fill();
 
-  // nivåbåge runt sockeln — full cirkel vid max
+  // sockel med fasad kant
+  const g = CX.createLinearGradient(x, y - size / 2, x, y + size / 2);
+  if (hostile) { g.addColorStop(0, '#33203d'); g.addColorStop(1, '#170d1c'); }
+  else { g.addColorStop(0, '#2a3563'); g.addColorStop(1, '#121830'); }
+  CX.fillStyle = g;
+  CX.strokeStyle = face.color;
+  CX.globalAlpha = 0.42;
+  CX.lineWidth = 1.4;
+  roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
+  CX.fill();
+  CX.stroke();
+  CX.globalAlpha = 1;
+
+  /* Nivån visas som en rim som hugger sockeln, inte som en cirkel runt den —
+     annars såg tornen ut som bubblor i stället för fästen. */
   if (tw.lv > 0) {
     CX.beginPath();
-    CX.arc(x, y, size * 0.54, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * tw.lv) / 5);
+    CX.arc(x, y, size * 0.455, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * tw.lv) / 5);
     CX.strokeStyle = face.color;
-    CX.globalAlpha = maxed ? 0.95 : 0.7;
-    CX.lineWidth = maxed ? 2.6 : 2;
+    CX.globalAlpha = maxed ? 1 : 0.65;
+    CX.lineWidth = maxed ? 2.4 : 1.8;
+    CX.lineCap = 'round';
     CX.stroke();
     CX.globalAlpha = 1;
+  }
+  // Maxad nivå får en extra glödrand så man ser vilka som är färdiga.
+  if (maxed) {
+    CX.globalCompositeOperation = 'lighter';
+    CX.globalAlpha = 0.16 + 0.06 * Math.sin(time * 2.5 + tw.cx);
+    CX.fillStyle = face.color;
+    roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
+    CX.fill();
+    CX.globalAlpha = 1;
+    CX.globalCompositeOperation = 'source-over';
   }
   // grenmarkering: liten prick i hörnet när tornet valt specialisering
   if (tw.branch) {
     CX.beginPath();
-    CX.arc(x + size * 0.36, y - size * 0.36, Math.max(1.6, cell * 0.045), 0, 7);
+    CX.arc(x + size * 0.34, y - size * 0.34, Math.max(1.5, cell * 0.04), 0, 7);
     CX.fillStyle = face.color;
     CX.fill();
   }
@@ -322,6 +412,7 @@ function drawTower(tw, s, hostile, time) {
   CX.save();
   CX.translate(x, y);
   CX.rotate(tw.angle + Math.PI / 2);
+  CX.translate(0, (tw.recoil || 0) * size * 0.13);   // rekyl bakåt i pipans riktning
   const hg = size * 0.31;
   CX.strokeStyle = face.color;
   CX.lineWidth = Math.max(1.6, cell * 0.055);
@@ -336,15 +427,25 @@ function drawTower(tw, s, hostile, time) {
   CX.arc(0, 0, Math.max(1.8, cell * 0.055), 0, 7);
   CX.fillStyle = face.color;
   CX.fill();
-  if (tw.flash > 0.4) {
+  // Mynningsflamma: en liten kon, inte bara ett streck.
+  if (tw.flash > 0.35) {
+    const f = tw.flash;
+    CX.globalCompositeOperation = 'lighter';
+    CX.globalAlpha = f;
+    CX.fillStyle = face.color;
     CX.beginPath();
-    CX.moveTo(0, -hg);
-    CX.lineTo(0, -hg - cell * 0.24 * tw.flash);
-    CX.strokeStyle = '#fff';
-    CX.globalAlpha = tw.flash;
-    CX.lineWidth = 2;
-    CX.stroke();
+    CX.moveTo(0, -hg - cell * 0.30 * f);
+    CX.lineTo(cell * 0.10 * f, -hg + cell * 0.02);
+    CX.lineTo(-cell * 0.10 * f, -hg + cell * 0.02);
+    CX.closePath();
+    CX.fill();
+    CX.fillStyle = '#ffffff';
+    CX.globalAlpha = f * 0.8;
+    CX.beginPath();
+    CX.arc(0, -hg, cell * 0.06 * f, 0, 7);
+    CX.fill();
     CX.globalAlpha = 1;
+    CX.globalCompositeOperation = 'source-over';
   }
   CX.restore();
 }
@@ -566,6 +667,17 @@ function drawFx(f, s) {
     CX.beginPath(); CX.arc(x, y, s.cell * 0.06 + (1 - k) * s.cell * 0.14, 0, 7);
     CX.strokeStyle = f.color; CX.globalAlpha = k; CX.lineWidth = 1.5; CX.stroke();
   }
+  CX.globalAlpha = 1;
+}
+
+function drawPart(p, s) {
+  const k = Math.max(0, p.life / p.max);
+  CX.globalAlpha = k;
+  CX.fillStyle = p.color;
+  const r = p.size * s.cell * 0.045 * (0.4 + k);
+  CX.beginPath();
+  CX.arc(gx(s, p.x), gy(s, p.y), r, 0, 7);
+  CX.fill();
   CX.globalAlpha = 1;
 }
 
