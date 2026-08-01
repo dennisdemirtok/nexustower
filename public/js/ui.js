@@ -58,7 +58,7 @@ export function updateHUD() {
   $('pLives').textContent = Math.max(0, G.me.board.lives);
   $('eLives').textContent = Math.max(0, G.foe.board.lives);
   $('gold').textContent = Math.floor(G.me.gold);
-  $('inc').textContent = G.me.income;
+  $('inc').textContent = Math.round(G.me.income);
   const t = Math.floor(G.time);
   $('wave').textContent = G.prep > 0
     ? `BYGG! ${Math.ceil(G.prep)} s till första vågen`
@@ -224,7 +224,7 @@ export function refreshSendbar() {
          ${creepIcon(key)}<div class="nm">${d.nm}</div><div class="lockmsg">🔒${d.unlockMin} min</div>`
       : `<div class="cls" style="color:${ARMOR[d.cls].color}">${ARMOR[d.cls].glyph}</div>
          ${creepIcon(key)}${nameTag(d)}
-         <div class="pr">◆${d.cost}</div><div class="in">+${creepIncome(key)} ink</div>${pips}
+         <div class="pr">◆${d.cost}</div><div class="in">+${Math.round(creepIncome(key))} ink</div>${pips}
          <div class="cdfill"></div><div class="qbadge" style="display:none"></div>`;
     el.classList.toggle('locked', locked);
   }

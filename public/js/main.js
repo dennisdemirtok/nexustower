@@ -366,7 +366,7 @@ function endMatch(win) {
       { k: 'TID', v: `${mins}:${String(secs).padStart(2, '0')}` },
       { k: 'SKICKADE', v: G.me.sent },
       { k: 'KILLS', v: G.me.kills },
-      { k: 'INKOMST', v: G.me.income },
+      { k: 'INKOMST', v: Math.round(G.me.income) },
       { k: 'LIV KVAR', v: Math.max(0, G.me.board.lives) },
     ],
     showNext: win && G.mode === 'campaign' && G.mapIndex < MAPS.length - 1,
@@ -626,7 +626,19 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 
 // Felsökningskrok: window.NW.G i konsolen ger hela speltillståndet.
-window.NW = { get G() { return G; }, hurtMe, endMatch };
+window.NW = {
+  get G() { return G; },
+  hurtMe, endMatch,
+  /* Låter ett testskript driva spelklockan manuellt. Panelen som spelet
+     körs i under utveckling fryser requestAnimationFrame, så utan den här
+     går det inte att spela igenom en match automatiskt. */
+  step(dt) { if (G && !G.over && !G.paused) update(dt); },
+  run(seconds, dt = 1 / 30) {
+    let n = 0;
+    for (let t = 0; t < seconds && G && !G.over; t += dt) { update(dt); n++; }
+    return n;
+  },
+};
 
 R.initRender(CV);
 

@@ -25,9 +25,14 @@ export const ECON = {
      som är själva matchklockan.
        500 = 6 torn (300) + 4 får (80) med slack, eller 8 torn + 2 får. */
   startGold: 500,
-  startIncome: 10,
+  /* Basinkomsten måste följa guldskalan. Med startguld 500 och torn för 50
+     gav 10/tick bara 40 guld i minuten — man hade råd med ett torn i minuten
+     och aldrig något över till att skicka. Efter tre minuters test stod
+     inkomsten kvar på 10 och ingen sida hade läckt ett enda liv.
+     30/tick ger 120 i minuten: ett torn OCH ett par sändningar. */
+  startIncome: 30,
   incInterval: 15,
-  incomeRate: 0.05,
+  incomeRate: 0.07,   // planens egen spak för kortare matcher (payback 3,5 min)
   bountyRate: 0.04,
 
   /* Ingen kö-gräns. Har du sparat ihop guldet ska du kunna trycka tjugo
@@ -315,34 +320,34 @@ export const CREEPS = {
   // ---- T1, från start ----
   far: {
     nm: 'FÅR', shape: 'blob', color: '#e8e2d0', cls: 'latt', sprite: 'swarm',
-    hp: 30, spd: 1.6, r: 0.20, cost: 20, inc: 1, leak: 1, unlockMin: 0,
+    hp: 30, spd: 1.6, r: 0.20, cost: 20, leak: 1, unlockMin: 0,
     note: 'Basen. Billigast vägen till inkomst.',
   },
   varg: {
     nm: 'VARG', shape: 'dart', color: '#9aa7c0', cls: 'latt', sprite: 'runner',
-    hp: 45, spd: 2.0, r: 0.20, cost: 40, inc: 2, leak: 1, unlockMin: 0,
+    hp: 45, spd: 2.0, r: 0.20, cost: 40, leak: 1, unlockMin: 0,
     note: '25 % snabbare — hinner förbi långsamma torn',
   },
   vildsvin: {
     nm: 'VILDSVIN', shape: 'tank', color: '#a9713f', cls: 'tung', sprite: 'grunt',
-    hp: 130, spd: 1.15, r: 0.26, cost: 60, inc: 3, leak: 1, unlockMin: 0,
+    hp: 130, spd: 1.15, r: 0.26, cost: 60, leak: 1, unlockMin: 0,
     note: 'Långsam tank. Bäst HP per guld i T1.',
   },
 
   // ---- T2, 3 minuter ----
   ghoul: {
     nm: 'GHOUL', shape: 'blob', color: '#7fb069', cls: 'tung', sprite: 'brute',
-    hp: 280, spd: 1.4, r: 0.27, cost: 120, inc: 6, leak: 1, unlockMin: 2,
+    hp: 280, spd: 1.4, r: 0.27, cost: 120, leak: 1, unlockMin: 2,
     note: 'Standardslitaren i mellanspelet',
   },
   harpya: {
     nm: 'HARPYA', shape: 'wing', color: '#66e0ff', cls: 'flyg', fly: true, sprite: 'drone',
-    hp: 240, spd: 1.7, r: 0.24, cost: 200, inc: 10, leak: 2, unlockMin: 2,
+    hp: 240, spd: 1.7, r: 0.24, cost: 200, leak: 2, unlockMin: 2,
     note: 'FLYG — går rakt över labyrinten',
   },
   shaman: {
     nm: 'SHAMAN', shape: 'blob', color: '#3ddc97', cls: 'tung', sprite: 'regen',
-    hp: 320, spd: 1.3, r: 0.27, cost: 280, inc: 14, leak: 2, unlockMin: 2,
+    hp: 320, spd: 1.3, r: 0.27, cost: 280, leak: 2, unlockMin: 2,
     healAura: 26, healRange: 2.2,
     note: 'Läker alla creeps omkring sig — döda den först',
   },
@@ -350,17 +355,17 @@ export const CREEPS = {
   // ---- T3, 7 minuter ----
   golem: {
     nm: 'GOLEM', shape: 'tank', color: '#b8a48c', cls: 'pans', sprite: 'titan',
-    hp: 1700, spd: 0.95, r: 0.34, cost: 600, inc: 30, leak: 2, unlockMin: 4,
+    hp: 1700, spd: 0.95, r: 0.34, cost: 600, leak: 2, unlockMin: 4,
     note: 'PANSAR — kinetisk och elektrisk studsar av',
   },
   wyvern: {
     nm: 'WYVERN', shape: 'wing', color: '#b57bff', cls: 'flyg', fly: true, sprite: 'brood',
-    hp: 1900, spd: 1.9, r: 0.32, cost: 900, inc: 45, leak: 2, unlockMin: 4,
+    hp: 1900, spd: 1.9, r: 0.32, cost: 900, leak: 2, unlockMin: 4,
     note: 'Snabb FLYG — kräver riktigt luftvärn',
   },
   prastinna: {
     nm: 'PRÄSTINNA', shape: 'blob', color: '#7fe8d0', cls: 'pans', sprite: 'shade',
-    hp: 2800, spd: 1.1, r: 0.30, cost: 1200, inc: 60, leak: 3, unlockMin: 4,
+    hp: 2800, spd: 1.1, r: 0.30, cost: 1200, leak: 3, unlockMin: 4,
     magicImmune: true,
     note: 'Magiimmun: ELD, IS och BLIXT gör 25 % skada',
   },
@@ -368,13 +373,13 @@ export const CREEPS = {
   // ---- T4, 12 minuter ----
   jatte: {
     nm: 'JÄTTE', shape: 'boss', color: '#5bb8e0', cls: 'pans', sprite: 'warden',
-    hp: 9000, spd: 0.85, r: 0.42, cost: 3000, inc: 150, leak: 4, unlockMin: 7,
+    hp: 9000, spd: 0.85, r: 0.42, cost: 3000, leak: 4, unlockMin: 7,
     towerDebuff: 0.35, debuffRange: 2.6,
     note: 'Sänker eldkraften hos torn den passerar med 35 %',
   },
   drake: {
     nm: 'DRAKE', shape: 'wing', color: '#ff8a3d', cls: 'flyg', fly: true, sprite: 'drake',
-    hp: 16000, spd: 1.3, r: 0.44, cost: 5000, inc: 250, leak: 5, unlockMin: 7,
+    hp: 16000, spd: 1.3, r: 0.44, cost: 5000, leak: 5, unlockMin: 7,
     splashResist: 0.5,
     note: 'FLYG · tar bara halv skada av splash',
   },
@@ -382,7 +387,7 @@ export const CREEPS = {
   // ---- Boss, 16 minuter ----
   behemoth: {
     nm: 'BEHEMOTH', shape: 'boss', color: '#ff3b5c', cls: 'pans', sprite: 'boss',
-    hp: 60000, spd: 0.7, r: 0.52, cost: 15000, inc: 750, leak: 8, unlockMin: 10,
+    hp: 60000, spd: 0.7, r: 0.52, cost: 15000, leak: 8, unlockMin: 10,
     deathSpawn: { key: 'far', count: 4 },
     note: 'Släpper fyra FÅR när den dör. Avslutaren.',
   },
@@ -390,7 +395,10 @@ export const CREEPS = {
 
 export const CREEP_KEYS = Object.keys(CREEPS);
 
-export const creepIncome = key => CREEPS[key].inc;
+/* Både income och bounty räknas ur kostnaden. Handskrivna heltal glider vid
+   avrundning — FÅR hamnade på 5 % i stället för 7 % — och då slutar
+   procentsatserna vara den garanti de ska vara. */
+export const creepIncome = key => CREEPS[key].cost * ECON.incomeRate;
 /* Bounty räknas ur kostnaden i stället för att skrivas per creep. Med
    handskrivna heltal blev FÅR 5 % i stället för 4 % vid avrundning, och då
    bryts regeln att bounty alltid ska ligga under income. */
