@@ -3,7 +3,7 @@ import {
   buildCost, sendUpCost, creepIncome, towerStat, needsBranch,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
-import { canBuild, lengthIfBuilt, rebuildSolid, routeCells, distAt } from './board.js';
+import { canBuild, rebuildSolid, routeCells, nextPlanSpot } from './board.js';
 import { COLS, ROWS } from './config.js';
 
 /* ============================================================
@@ -79,42 +79,8 @@ export function aiThink(G, dt) {
   if (incoming === 0 && hurt < 0.15) defWeight = 0.22;
   defWeight = Math.min(1, defWeight * (0.7 + cfg.iq * 0.5));
 
-  if (Math.random() < defWeight) spendOnDefense(A, G.wave, prof);
+  if (G.prep > 0 || Math.random() < defWeight) spendOnDefense(A, G.wave, prof);
   else spendOnOffense(A);
-}
-
-/* Hitta rutan som förlänger creepsens väg mest utan att stänga den.
-   Bara rutor intill den nuvarande rutten kan påverka den, så vi slipper
-   testa hela fältet. */
-function bestMazeSpot(b, iq) {
-  const route = routeCells(b);
-  const seen = new Set();
-  const cands = [];
-  for (const [rx, ry] of route) {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = rx + dx, y = ry + dy;
-        const key = x + ',' + y;
-        if (x < 0 || y < 0 || x >= COLS || y >= ROWS || seen.has(key)) continue;
-        seen.add(key);
-        if (b.solid.has(key)) continue;
-        if (x === b.entry[0] && y === b.entry[1]) continue;
-        if (x === b.exit[0] && y === b.exit[1]) continue;
-        cands.push([x, y]);
-      }
-    }
-  }
-  let best = null, bestLen = b.pathLen;
-  for (const [x, y] of cands) {
-    const len = lengthIfBuilt(b, x, y);
-    if (len > bestLen) { bestLen = len; best = [x, y]; }
-  }
-  // Sämre AI tar inte alltid det bästa draget.
-  if (best && Math.random() > iq * 0.7 + 0.3 && cands.length) {
-    const alt = cands[Math.floor(Math.random() * cands.length)];
-    if (lengthIfBuilt(b, alt[0], alt[1]) > b.pathLen) return alt;
-  }
-  return best;
 }
 
 function spendOnDefense(A, wave, prof) {
@@ -126,7 +92,7 @@ function spendOnDefense(A, wave, prof) {
      bättre att förlänga den än att köpa mer eldkraft — creepsen hinner
      helt enkelt inte bli beskjutna nog. */
   if (b.pathLen < cfg.mazeTarget && A.gold >= wallCost) {
-    const spot = bestMazeSpot(b, cfg.iq);
+    const spot = nextPlanSpot(b);
     if (spot && canBuild(b, spot[0], spot[1]).ok) {
       A.gold -= wallCost;
       b.towers.push({
@@ -151,32 +117,6 @@ function spendOnDefense(A, wave, prof) {
     }
   }
   cands.sort((a, z) => z.value - a.value);
-
-  /* 3) Nya skadetorn — helst nära rutten där de faktiskt får skjuta. */
-  const wantsMore = b.towers.filter(t => t.type !== 'wall').length < Math.min(14, 3 + Math.floor(wave * 0.8));
-  if (wantsMore && (!cands.length || Math.random() < 0.5)) {
-    const options = TOWER_KEYS.filter(k => k !== 'wall')
-      .map(k => ({ k, cost: buildCost(k, b.towers.length), v: valueAgainst(k, 0, null, prof) }))
-      .filter(o => A.gold >= o.cost)
-      .sort((a, z) => z.v / z.cost - a.v / a.cost);
-    if (options.length) {
-      const pick = Math.random() < cfg.iq ? options[0] : options[Math.floor(Math.random() * options.length)];
-      const route = routeCells(b);
-      for (let tries = 0; tries < 24; tries++) {
-        const [rx, ry] = route[Math.floor(Math.random() * route.length)];
-        const x = rx + Math.round(Math.random() * 2 - 1);
-        const y = ry + Math.round(Math.random() * 2 - 1);
-        if (!canBuild(b, x, y).ok) continue;
-        A.gold -= pick.cost;
-        b.towers.push({
-          type: pick.k, cx: x, cy: y, lv: 0, branch: null,
-          cd: 0, recoil: 0, invested: pick.cost, angle: -1.57, flash: 0,
-        });
-        rebuildSolid(b);
-        return;
-      }
-    }
-  }
 
   if (cands.length) {
     const idx = Math.random() < cfg.iq ? 0 : Math.floor(Math.random() * cands.length);

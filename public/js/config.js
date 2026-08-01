@@ -26,6 +26,10 @@ export const ECON = {
      och tittar på nedräkningen medan creepsen kommer. Det är tempot. */
   incInterval: 15,
 
+  /* Byggfas innan första creepen får skickas. Utan den läcker man på nio
+     sekunder — man hinner inte lägga en enda rad. WC3-TD:er har samma
+     nedräkning innan våg ett. */
+  prepTime: 25,
   sendCooldown: 1.0,     // sekunder mellan sändningar (kön hanterar resten)
   queueMax: 6,
   /* Ingen byggskatt längre. I en labyrint SKA man spamma billiga
@@ -138,203 +142,82 @@ export const MAPS = [
    det är där partiet avgörs.
    Totalt: 3 gemensamma + 3 i vald gren = 6 nivåer per torn.
    ============================================================ */
+/* ============================================================
+   TORNTRÄDET
+   Du bygger bara EN sak: en träpalisad för 40 guld. Den är både
+   labyrintmaterial och början på varje torn du kommer att äga.
+
+     nivå 1  TRÄPALISAD   40 g   — spärr, nästan ingen skada
+     nivå 2  STENTORN    110 g   — fortfarande billigt
+     nivå 3  VÄLJ ELEMENT        — eld, is, blixt, ljus eller mörker
+     nivå 4-6                    — vidare i det valda elementet
+
+   Elementen är de fem från WC3-förlagan och varje element har sin egen
+   skadetyp, så valet avgör vad tornet biter på.
+   ============================================================ */
 export const TOWERS = {
-  /* Labyrintmaterialet. Nästan ingen skada — poängen är att den kostar
-     nästan ingenting och att du kan sälja tillbaka 85 %. Det är den du
-     spammar för att rita vägen creepsen tvingas gå. */
   wall: {
     name: 'PALISAD', color: '#8a93b8', shape: 'block', dmg: 'kin',
     tag: 'Billig · bygger labyrinten',
-    desc: 'Spärr med en nypa skada. Bygg många, sälj och bygg om.',
+    desc: 'Spärr med en nypa skada. Bygg många, uppgradera de som står bra.',
     lv: [
-      { cost: 40, dmg: 5, rate: 1.2, range: 1.5 },
-      { cost: 70, dmg: 12, rate: 1.1, range: 1.6 },
-      { cost: 120, dmg: 26, rate: 1.0, range: 1.7 },
+      { cost: 40,  dmg: 6,  rate: 1.2, range: 1.5 },
+      { cost: 110, dmg: 18, rate: 1.0, range: 1.8 },
     ],
     branches: {
-      a: {
-        name: 'BASTION', color: '#b8c2e8', shape: 'block', dmg: 'kin',
-        tag: 'Tålig spärr med lite tyngd',
-        desc: 'Fortfarande billig, men börjar faktiskt göra skada.',
+      eld: {
+        name: 'ELD', color: '#ff6b3d', shape: 'flame', dmg: 'ter',
+        tag: 'Splash + brand',
+        desc: 'Träffar allt i en radie och sätter eld som tickar i 3 s.',
         lv: [
-          { cost: 240, dmg: 58, rate: 0.95, range: 1.9 },
-          { cost: 420, dmg: 125, rate: 0.9, range: 2.0 },
-          { cost: 760, dmg: 270, rate: 0.85, range: 2.1 },
+          { cost: 320,  dmg: 60,  rate: 1.00, range: 2.3, splash: 1.10, burn: 25,  burnT: 3 },
+          { cost: 700,  dmg: 130, rate: 0.95, range: 2.5, splash: 1.20, burn: 60,  burnT: 3 },
+          { cost: 1500, dmg: 280, rate: 0.90, range: 2.7, splash: 1.35, burn: 140, burnT: 3 },
+          { cost: 3200, dmg: 620, rate: 0.85, range: 2.9, splash: 1.50, burn: 320, burnT: 3 },
         ],
       },
-      b: {
-        name: 'TULL', color: '#3ddc97', shape: 'block', dmg: 'kry',
-        tag: 'Saktar allt som passerar',
-        desc: 'Ingen skada att tala om — men bromsar i hela labyrinten.',
+      is: {
+        name: 'IS', color: '#9bd8ff', shape: 'dia', dmg: 'kry',
+        tag: 'Bromsar allt',
+        desc: 'Upp till 72 % långsammare. Ett IS-torn förlänger hela labyrinten.',
         lv: [
-          { cost: 220, dmg: 14, rate: 0.8, range: 2.0, slow: 0.30, slowT: 1.4 },
-          { cost: 380, dmg: 30, rate: 0.75, range: 2.1, slow: 0.36, slowT: 1.6 },
-          { cost: 680, dmg: 64, rate: 0.7, range: 2.2, slow: 0.42, slowT: 1.8 },
+          { cost: 320,  dmg: 34,  rate: 0.80, range: 2.3, slow: 0.42, slowT: 1.7 },
+          { cost: 700,  dmg: 74,  rate: 0.72, range: 2.5, slow: 0.52, slowT: 2.0 },
+          { cost: 1500, dmg: 160, rate: 0.65, range: 2.7, slow: 0.62, slowT: 2.3 },
+          { cost: 3200, dmg: 350, rate: 0.58, range: 2.9, slow: 0.72, slowT: 2.6 },
         ],
       },
-    },
-  },
-
-  pulse: {
-    name: 'PULS', color: '#4fd8eb', shape: 'tri', dmg: 'kin',
-    tag: 'Enkelmål · snabb',
-    desc: 'Billig grundpjäs med hög eldhastighet.',
-    lv: [
-      { cost: 160, dmg: 13, rate: 0.35, range: 2.4 },
-      { cost: 220, dmg: 27, rate: 0.32, range: 2.5 },
-      { cost: 380, dmg: 56, rate: 0.30, range: 2.6 },
-    ],
-    branches: {
-      a: {
-        name: 'SPLITTER', color: '#4fd8eb', shape: 'tri', dmg: 'kin',
-        tag: 'Träffar flera mål',
-        desc: 'Delar skottet mellan flera creeps. Mal ner svärmar.',
+      blixt: {
+        name: 'BLIXT', color: '#a78bfa', shape: 'bolt', dmg: 'ele',
+        tag: 'Kedja mellan mål',
+        desc: 'Hoppar upp till åtta gånger. Raderar svärmar och drönare.',
         lv: [
-          { cost: 700,  dmg: 70,  rate: 0.28, range: 2.8, multi: 2 },
-          { cost: 1250, dmg: 145, rate: 0.26, range: 3.0, multi: 2 },
-          { cost: 2250, dmg: 300, rate: 0.24, range: 3.2, multi: 3 },
+          { cost: 320,  dmg: 46,  rate: 1.00, range: 2.5, chain: 3 },
+          { cost: 700,  dmg: 100, rate: 0.95, range: 2.7, chain: 4 },
+          { cost: 1500, dmg: 215, rate: 0.88, range: 2.9, chain: 6 },
+          { cost: 3200, dmg: 470, rate: 0.80, range: 3.2, chain: 8 },
         ],
       },
-      b: {
-        name: 'LANS', color: '#ffd166', shape: 'cross', dmg: 'sik',
-        tag: 'Genomborrar pansar',
-        desc: 'Byter till siktad skada. Straffar TUNG och PANSAR.',
+      ljus: {
+        name: 'LJUS', color: '#ffd166', shape: 'aa', dmg: 'sik',
+        tag: 'Lång räckvidd · luftvärn',
+        desc: 'Täcker halva fältet och får bonus mot FLYG.',
         lv: [
-          { cost: 720,  dmg: 165, rate: 0.40, range: 3.0 },
-          { cost: 1280, dmg: 350, rate: 0.38, range: 3.2 },
-          { cost: 2300, dmg: 760, rate: 0.36, range: 3.4 },
+          { cost: 320,  dmg: 95,  rate: 1.30, range: 3.8 },
+          { cost: 700,  dmg: 205, rate: 1.20, range: 4.2, airBonus: 1.6 },
+          { cost: 1500, dmg: 440, rate: 1.10, range: 4.6, airBonus: 1.8 },
+          { cost: 3200, dmg: 950, rate: 1.00, range: 5.0, airBonus: 2.0 },
         ],
       },
-    },
-  },
-
-  blast: {
-    name: 'BLAST', color: '#ff9d54', shape: 'hex', dmg: 'spr',
-    tag: 'Splash · marknära',
-    desc: 'Träffar allt i en radie. Nästan verkningslös mot FLYG.',
-    lv: [
-      { cost: 280, dmg: 28,  rate: 1.10, range: 2.2, splash: 1.0 },
-      { cost: 380, dmg: 55,  rate: 1.05, range: 2.3, splash: 1.1 },
-      { cost: 660, dmg: 112, rate: 1.00, range: 2.5, splash: 1.2 },
-    ],
-    branches: {
-      a: {
-        name: 'BRAND', color: '#ff6b3d', shape: 'flame', dmg: 'ter',
-        tag: 'Sätter eld · skada över tid',
-        desc: 'Termisk skada plus brand som tickar i 3 s. Stapla inte — den förnyas.',
+      morker: {
+        name: 'MÖRKER', color: '#c05be0', shape: 'star', dmg: 'spr',
+        tag: 'Stor sprängradie',
+        desc: 'Dubbel radie mot slutet, och på maxnivå struntar den i pansar helt.',
         lv: [
-          { cost: 1200, dmg: 190, rate: 0.95, range: 2.6, splash: 1.2, burn: 70,  burnT: 3 },
-          { cost: 2050, dmg: 390, rate: 0.90, range: 2.7, splash: 1.3, burn: 150, burnT: 3 },
-          { cost: 3600, dmg: 800, rate: 0.85, range: 2.9, splash: 1.4, burn: 320, burnT: 3 },
-        ],
-      },
-      b: {
-        name: 'SEISMISK', color: '#ff9d54', shape: 'hex', dmg: 'spr',
-        tag: 'Stor radie · skakar ner',
-        desc: 'Dubbelt så stor sprängradie och en kort inbromsning.',
-        lv: [
-          { cost: 1180, dmg: 235,  rate: 1.00, range: 2.7, splash: 1.6, slow: 0.25, slowT: 1.2 },
-          { cost: 2000, dmg: 480,  rate: 0.95, range: 2.9, splash: 1.8, slow: 0.30, slowT: 1.4 },
-          { cost: 3520, dmg: 1000, rate: 0.90, range: 3.1, splash: 2.1, slow: 0.35, slowT: 1.6 },
-        ],
-      },
-    },
-  },
-
-  cryo: {
-    name: 'KRYO', color: '#9bd8ff', shape: 'dia', dmg: 'kry',
-    tag: 'Saktar ner',
-    desc: 'Låg skada, men håller kvar creeps i de andra tornens eldzon.',
-    lv: [
-      { cost: 240, dmg: 6,  rate: 0.80, range: 2.3, slow: 0.35, slowT: 1.5 },
-      { cost: 320, dmg: 13, rate: 0.75, range: 2.4, slow: 0.42, slowT: 1.7 },
-      { cost: 560, dmg: 27, rate: 0.70, range: 2.6, slow: 0.48, slowT: 1.9 },
-    ],
-    branches: {
-      a: {
-        name: 'FROST', color: '#9bd8ff', shape: 'dia', dmg: 'kry',
-        tag: 'Extrem inbromsning',
-        desc: 'Upp till 75 % långsammare. Ett FROST-torn förvandlar en kort bana till en lång.',
-        lv: [
-          { cost: 1000, dmg: 55,  rate: 0.65, range: 2.8, slow: 0.60, slowT: 2.2 },
-          { cost: 1700, dmg: 115, rate: 0.60, range: 3.0, slow: 0.68, slowT: 2.4 },
-          { cost: 3000, dmg: 240, rate: 0.55, range: 3.2, slow: 0.75, slowT: 2.6 },
-        ],
-      },
-      b: {
-        name: 'SKÄRVA', color: '#7fe8d0', shape: 'shard', dmg: 'kry',
-        tag: 'Skadetorn · flera mål',
-        desc: 'Offrar inbromsningen för riktig skada mot TUNG.',
-        lv: [
-          { cost: 980,  dmg: 90,  rate: 0.60, range: 2.8, slow: 0.32, slowT: 1.4, multi: 3 },
-          { cost: 1680, dmg: 185, rate: 0.55, range: 3.0, slow: 0.35, slowT: 1.5, multi: 3 },
-          { cost: 2960, dmg: 390, rate: 0.50, range: 3.2, slow: 0.38, slowT: 1.6, multi: 4 },
-        ],
-      },
-    },
-  },
-
-  arc: {
-    name: 'ARC', color: '#a78bfa', shape: 'star', dmg: 'ele',
-    tag: 'Kedjeblixt',
-    desc: 'Hoppar mellan creeps. Elektrisk skada äter LÄTT och FLYG.',
-    lv: [
-      { cost: 440,  dmg: 32,  rate: 1.00, range: 2.6, chain: 3 },
-      { cost: 600,  dmg: 62,  rate: 0.95, range: 2.7, chain: 3 },
-      { cost: 1040, dmg: 125, rate: 0.90, range: 2.9, chain: 4 },
-    ],
-    branches: {
-      a: {
-        name: 'STORM', color: '#a78bfa', shape: 'star', dmg: 'ele',
-        tag: 'Många hopp',
-        desc: 'Upp till nio mål per skott. Raderar svärmar och drönarflock.',
-        lv: [
-          { cost: 1850, dmg: 230, rate: 0.85, range: 3.1, chain: 6 },
-          { cost: 3150, dmg: 470, rate: 0.80, range: 3.3, chain: 7 },
-          { cost: 5450, dmg: 960, rate: 0.75, range: 3.5, chain: 9 },
-        ],
-      },
-      b: {
-        name: 'ÖVERLADDNING', color: '#d68bfa', shape: 'bolt', dmg: 'ele',
-        tag: 'Få hopp · enorm skada',
-        desc: 'Nästan all kraft i första målet. Bra mot enstaka tunga creeps.',
-        lv: [
-          { cost: 1800, dmg: 520,  rate: 1.10, range: 3.0, chain: 2 },
-          { cost: 3100, dmg: 1080, rate: 1.05, range: 3.2, chain: 2 },
-          { cost: 5400, dmg: 2250, rate: 1.00, range: 3.4, chain: 3 },
-        ],
-      },
-    },
-  },
-
-  rail: {
-    name: 'RAIL', color: '#ffd166', shape: 'cross', dmg: 'sik',
-    tag: 'Lång räckvidd',
-    desc: 'Täcker halva banan. Siktad skada mot TUNG, PANSAR och FLYG.',
-    lv: [
-      { cost: 400, dmg: 60,  rate: 1.60, range: 4.2 },
-      { cost: 560, dmg: 122, rate: 1.50, range: 4.4 },
-      { cost: 960, dmg: 250, rate: 1.40, range: 4.6 },
-    ],
-    branches: {
-      a: {
-        name: 'LUFTVÄRN', color: '#66e0ff', shape: 'aa', dmg: 'sik',
-        tag: 'Dubbel skada mot FLYG',
-        desc: 'Snabbare eldgivning och specialammunition mot luftmål.',
-        lv: [
-          { cost: 1700, dmg: 380,  rate: 0.95, range: 4.8, airBonus: 2.0 },
-          { cost: 2950, dmg: 780,  rate: 0.90, range: 5.1, airBonus: 2.0 },
-          { cost: 5150, dmg: 1600, rate: 0.85, range: 5.4, airBonus: 2.2 },
-        ],
-      },
-      b: {
-        name: 'GAUSS', color: '#ffe08a', shape: 'cross', dmg: 'sik',
-        tag: 'Ignorerar all pansarklass',
-        desc: 'Ren skada — inga multiplikatorer alls, varken upp eller ner.',
-        lv: [
-          { cost: 1720, dmg: 1150, rate: 1.35, range: 5.2, trueDmg: true },
-          { cost: 2980, dmg: 2400, rate: 1.30, range: 5.6, trueDmg: true },
-          { cost: 5200, dmg: 5000, rate: 1.25, range: 6.0, trueDmg: true },
+          { cost: 320,  dmg: 70,  rate: 1.10, range: 2.2, splash: 1.30 },
+          { cost: 700,  dmg: 150, rate: 1.05, range: 2.4, splash: 1.50 },
+          { cost: 1500, dmg: 320, rate: 1.00, range: 2.6, splash: 1.75 },
+          { cost: 3200, dmg: 700, rate: 0.95, range: 2.8, splash: 2.00, trueDmg: true },
         ],
       },
     },
@@ -342,9 +225,10 @@ export const TOWERS = {
 };
 
 export const TOWER_KEYS = Object.keys(TOWERS);
-export const BASE_LEVELS = 3;   // nivåer innan grenvalet
+export const BASE_LEVELS = 2;   // TRÄ och STEN innan elementvalet
 export const MAX_TOWER_LV = 6;
-export const BRANCH_KEYS = ['a', 'b'];
+export const BRANCH_KEYS = Object.keys(TOWERS.wall.branches);
+export const branchKeysFor = type => Object.keys(TOWERS[type].branches);
 
 /* Statistik för en given nivå. lv är 0-indexerad (0 = nivå 1). */
 export function towerStat(type, lv, branch) {
@@ -357,7 +241,9 @@ export function towerStat(type, lv, branch) {
 export function towerFace(type, lv, branch) {
   const d = TOWERS[type];
   if (lv < BASE_LEVELS || !branch) {
-    return { name: d.name, color: d.color, shape: d.shape, dmg: d.dmg, tag: d.tag, desc: d.desc };
+    const lvl = Math.min(lv, d.lv.length - 1);
+    const nm = lv >= 1 ? 'STENTORN' : d.name;
+    return { name: nm, color: lvl >= 1 ? '#b8c2e8' : d.color, shape: d.shape, dmg: d.dmg, tag: d.tag, desc: d.desc };
   }
   const b = d.branches[branch];
   return { name: b.name, color: b.color, shape: b.shape, dmg: b.dmg, tag: b.tag, desc: b.desc };

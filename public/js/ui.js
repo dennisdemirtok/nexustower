@@ -1,7 +1,7 @@
 import {
   TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, MAPS, ECON, DMG, ARMOR, TYPE_VS,
   buildCost, sendUpCost, creepIncome, MAX_TOWER_LV, BASE_LEVELS,
-  towerStat, towerFace, needsBranch,
+  towerStat, towerFace, needsBranch, branchKeysFor,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
 import * as Audio from './audio.js';
@@ -58,7 +58,9 @@ export function updateHUD() {
   $('gold').textContent = Math.floor(G.me.gold);
   $('inc').textContent = G.me.income;
   const t = Math.floor(G.time);
-  $('wave').textContent = `VÅG ${G.wave + 1} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  $('wave').textContent = G.prep > 0
+    ? `BYGG! ${Math.ceil(G.prep)} s till första vågen`
+    : `VÅG ${G.wave + 1} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   $('incBar').style.width = (100 * (1 - G.incT / ECON.incInterval)) + '%';
   refreshSendbarState();
 }
@@ -92,7 +94,7 @@ export function setViewTabs(v) {
   $(v === 'def' ? 'dotDef' : 'dotAtk').classList.remove('on');
 }
 export function alertTab(which) {
-  if (document.body.classList.contains('dual')) return;
+
   if (G && G.view === which) return;
   $(which === 'def' ? 'dotDef' : 'dotAtk').classList.add('on');
 }
@@ -298,8 +300,8 @@ export function openTower(tw) {
   let action;
   if (atFork) {
     // Grenvalet — det viktigaste beslutet i hela spelet.
-    action = `<div class="forkhead">VÄLJ SPECIALISERING — permanent</div>
-      <div class="forkrow">` + ['a', 'b'].map(br => {
+    action = `<div class="forkhead">VÄLJ ELEMENT — permanent</div>
+      <div class="forkrow">` + branchKeysFor(tw.type).map(br => {
       const b = TOWERS[tw.type].branches[br];
       const st = b.lv[0];
       const poor = G.me.gold < st.cost;

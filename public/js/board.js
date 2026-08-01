@@ -161,4 +161,33 @@ export function routeCells(b) {
   return out;
 }
 
+/* Serpentinmallen: rader med en lucka omväxlande i vänster och höger kant.
+   Att bygga ruta för ruta girigt fastnar direkt — efter första väggen finns
+   ingen enskild ruta som förlänger vägen, för creepsen går bara runt. Det är
+   RADEN som är draget, precis som en människa bygger. */
+export function serpentinePlan(b) {
+  const out = [];
+  for (let y = 2; y < ROWS - 2; y += 2) {
+    const gapRight = ((y / 2) % 2) === 1;
+    for (let x = 0; x < COLS; x++) {
+      if (gapRight && x === COLS - 1) continue;
+      if (!gapRight && x === 0) continue;
+      if (x === b.entry[0] && y === b.entry[1]) continue;
+      if (x === b.exit[0] && y === b.exit[1]) continue;
+      out.push([x, y]);
+    }
+  }
+  return out;
+}
+
+/* Nästa ruta i mallen som faktiskt går att bygga på. */
+export function nextPlanSpot(b) {
+  if (!b._plan) b._plan = serpentinePlan(b);
+  for (const [x, y] of b._plan) {
+    if (b.solid.has(x + ',' + y)) continue;
+    if (canBuild(b, x, y).ok) return [x, y];
+  }
+  return null;
+}
+
 export const INFINITY = INF;

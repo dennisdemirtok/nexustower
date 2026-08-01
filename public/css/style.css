@@ -204,19 +204,21 @@ canvas{position:absolute;inset:0;touch-action:none;display:block}
   font-family:'Chakra Petch',sans-serif;font-size:10px;letter-spacing:.14em;
   color:var(--amber);margin-bottom:7px;text-align:center;
 }
-.forkrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+/* Fem element ska rymmas utan att kortet blir en tegelvägg. */
+.forkrow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+@media(max-width:620px){.forkrow{grid-template-columns:repeat(3,1fr)}}
 .forkcard{
   background:var(--panel2);border:1px solid var(--line2);border-radius:var(--r);
-  padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:9px 5px;display:flex;flex-direction:column;align-items:center;gap:4px;
   cursor:pointer;transition:transform .09s,border-color .15s;text-align:center;
 }
 .forkcard:active{transform:scale(.96)}
 .forkcard.poor{opacity:.45}
-.forkcard .fn{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.05em}
-.forkcard .fd{font-size:9px;color:var(--muted);line-height:1.35}
+.forkcard .fn{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:11.5px;letter-spacing:.03em}
+.forkcard .fd{font-size:8.5px;color:var(--muted);line-height:1.3}
 .forkcard .fp{font-size:12px;color:var(--gold);font-weight:600}
-.forkcard .effrow{margin:2px 0 0;justify-content:center;gap:3px}
-.forkcard .eff{padding:2px 5px;font-size:8px}
+.forkcard .effrow{margin:2px 0 0;justify-content:center;gap:2px}
+.forkcard .eff{padding:1px 3px;font-size:7.5px;gap:2px}
 
 .uphead{display:flex;align-items:center;gap:11px;margin-bottom:9px}
 .upname{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:15px;letter-spacing:.04em}
@@ -360,8 +362,6 @@ canvas{position:absolute;inset:0;touch-action:none;display:block}
 #banner .sub{display:block;font-size:10px;letter-spacing:.16em;color:var(--muted);margin-top:5px}
 
 /* ============ desktop / split ============ */
-body.dual #viewtabs{display:none}
-body.dual #viewBtn{display:none}
 body.dual #sendbar{max-width:1100px;margin:0 auto;width:100%}
 body.dual #controls{max-width:1100px;margin:0 auto;width:100%;justify-content:center}
 @media(min-width:880px) and (orientation:landscape){

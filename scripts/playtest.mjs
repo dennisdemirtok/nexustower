@@ -9,9 +9,9 @@
 
 import {
   MAPS, ECON, CREEPS, CREEP_KEYS, TOWER_KEYS, BASE_LEVELS, MAX_TOWER_LV,
-  buildCost, creepIncome, sendUpCost, towerStat, needsBranch, waveHpMul,
+  buildCost, creepIncome, sendUpCost, towerStat, needsBranch, waveHpMul, BRANCH_KEYS,
 } from '../public/js/config.js';
-import { makeBoard, canBuild, rebuildSolid, lengthIfBuilt, routeCells } from '../public/js/board.js';
+import { makeBoard, canBuild, rebuildSolid, routeCells, nextPlanSpot } from '../public/js/board.js';
 import { spawn, stepBoard, towerDps, towerDpsVs } from '../public/js/sim.js';
 import { initAI, aiThink, aiNoteIncoming } from '../public/js/ai.js';
 
@@ -67,46 +67,13 @@ function playerTurn(dt, wave) {
   // 1) Bygg labyrint tills vägen är lagom lång — det är öppningen i LTW.
   const wallCost = buildCost('wall', b.towers.length);
   if (b.pathLen < S.mazeTarget && P.gold >= wallCost) {
-    const route = routeCells(b);
-    let best = null, bestLen = b.pathLen;
-    const seen = new Set();
-    for (const [rx, ry] of route) {
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const x = rx + dx, y = ry + dy, k = x + ',' + y;
-        if (seen.has(k)) continue; seen.add(k);
-        if (!canBuild(b, x, y).ok) continue;
-        const len = lengthIfBuilt(b, x, y);
-        if (len > bestLen) { bestLen = len; best = [x, y]; }
-      }
-    }
-    if (best) {
+    const spot = nextPlanSpot(b);
+    if (spot) {
       P.gold -= wallCost;
-      b.towers.push({ type: 'wall', cx: best[0], cy: best[1], lv: 0, branch: null,
+      b.towers.push({ type: 'wall', cx: spot[0], cy: spot[1], lv: 0, branch: null,
         cd: 0, invested: wallCost, angle: -1.57, flash: 0 });
       rebuildSolid(b);
       return;
-    }
-  }
-
-  // 2) Skadetorn längs rutten
-  const gunCount = b.towers.filter(t => t.type !== 'wall').length;
-  if (gunCount < S.towerTarget) {
-    const opts = TOWER_KEYS.filter(k => k !== 'wall')
-      .map(k => ({ k, cost: buildCost(k, b.towers.length), v: valueOf(k, 0, null, prof) }))
-      .filter(o => P.gold >= o.cost)
-      .sort((x, z) => z.v / z.cost - x.v / x.cost);
-    if (opts.length) {
-      const route = routeCells(b);
-      for (let i = 0; i < 30; i++) {
-        const [rx, ry] = route[Math.floor(Math.random() * route.length)];
-        const x = rx + Math.round(Math.random() * 2 - 1), y = ry + Math.round(Math.random() * 2 - 1);
-        if (!canBuild(b, x, y).ok) continue;
-        P.gold -= opts[0].cost;
-        b.towers.push({ type: opts[0].k, cx: x, cy: y, lv: 0, branch: null,
-          cd: 0, invested: opts[0].cost, angle: -1.57, flash: 0 });
-        rebuildSolid(b);
-        return;
-      }
     }
   }
 
@@ -114,7 +81,7 @@ function playerTurn(dt, wave) {
   const cands = [];
   for (const t of b.towers) {
     if (t.lv + 1 >= MAX_TOWER_LV) continue;
-    const brs = needsBranch(t) ? ['a', 'b'] : [t.branch];
+    const brs = needsBranch(t) ? BRANCH_KEYS : [t.branch];
     for (const br of brs) {
       const st = towerStat(t.type, t.lv + 1, br);
       if (P.gold < st.cost) continue;
@@ -149,6 +116,7 @@ function playerSend(dt) {
 
 /* ---- körning ---- */
 const STEP = 1 / 60;
+let prep = ECON.prepTime;
 let time = 0, wave = 0, waveT = ECON.waveInterval, incT = ECON.incInterval;
 let sendCd = 0, winner = null;
 const log = [];
@@ -159,6 +127,7 @@ let brokeTime = 0, richTime = 0;
 
 while (time < 60 * 30 && !winner) {
   time += STEP;
+  if (prep > 0) prep -= STEP;
   incT -= STEP;
   if (incT <= 0) { incT += ECON.incInterval; P.gold += P.income; A.gold += A.income; }
   waveT -= STEP;
@@ -166,10 +135,10 @@ while (time < 60 * 30 && !winner) {
 
   playerTurn(STEP, wave);
   playerSend(STEP);
-  aiThink({ foe: A, wave }, STEP);
+  aiThink({ foe: A, wave, prep }, STEP);
 
   sendCd = Math.max(0, sendCd - STEP);
-  if (sendCd <= 0 && P.pendingSend.length) {
+  if (prep <= 0 && sendCd <= 0 && P.pendingSend.length) {
     const s = P.pendingSend.shift();
     const d = CREEPS[s.key];
     if (P.gold >= d.cost) {
@@ -179,7 +148,7 @@ while (time < 60 * 30 && !winner) {
       aiNoteIncoming(A, s.key);
     }
   }
-  while (A.pendingSend.length) {
+  while (prep <= 0 && A.pendingSend.length) {
     const s = A.pendingSend.shift();
     spawn(P.board, s.key, waveHpMul(wave), s.lv);
     P.seen[CREEPS[s.key].cls] += CREEPS[s.key].hp * (CREEPS[s.key].count || 1);
@@ -199,7 +168,7 @@ while (time < 60 * 30 && !winner) {
     });
   }
 
-  if (P.gold < 160) brokeTime += STEP; else richTime += STEP;
+  if (P.gold < 40) brokeTime += STEP; else richTime += STEP;
 
   if (Math.abs(time % 60) < STEP / 2) {
     log.push({ t: Math.round(time), wave, P: snap(P), A: snap(A) });
@@ -237,4 +206,4 @@ console.log(`Första läckan: du ${firstLeak.P ? Math.round(firstLeak.P) + 's' :
 console.log(winner ? `\nVINNARE: ${winner} efter ${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`
                    : '\nOAVGJORT efter 30 min — matchen fastnar.');
 console.log(`Du skickade ${P.sent}, läckte ${P.leaked}. AI skickade ${A.sent}, läckte ${A.leaked}.`);
-console.log(`Pank (< 160 guld, kan inte ens bygga billigaste tornet): ${Math.round(100 * brokeTime / (brokeTime + richTime))} % av matchen`);
+console.log(`Pank (< 40 guld, kan inte ens lägga en palisad): ${Math.round(100 * brokeTime / (brokeTime + richTime))} % av matchen`);

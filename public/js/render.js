@@ -32,23 +32,13 @@ export function resize() {
   L.w = w; L.h = h;
   vignette = null;   // byggs om vid nästa bildruta i den nya storleken
 
-  const dual = w >= 880 && w / h > 1.15;
-  L.mode = dual ? 'dual' : 'single';
-
-  if (dual) {
-    const gap = 28;
-    const half = (w - gap) / 2;
-    const cell = Math.min((half - 16) / COLS, (h - 34) / ROWS);
-    const bw = cell * COLS, bh = cell * ROWS;
-    const oy = (h - bh) / 2 + 8;
-    L.me = makeSlot((half - bw) / 2, oy, cell);
-    L.foe = makeSlot(half + gap + (half - bw) / 2, oy, cell);
-  } else {
-    const cell = Math.min(w / COLS, (h - 22) / ROWS);
-    const ox = (w - cell * COLS) / 2, oy = (h - cell * ROWS) / 2;
-    L.me = makeSlot(ox, oy, cell);
-    L.foe = L.me;
-  }
+  /* Alltid EN bana i taget, även på desktop. Man behöver ytan till sin egen
+     labyrint — motståndaren kikar man på med VÄXLA VY när man vill. */
+  L.mode = 'single';
+  const cell = Math.min((w - 24) / COLS, (h - 26) / ROWS);
+  const ox = (w - cell * COLS) / 2, oy = (h - cell * ROWS) / 2;
+  L.me = makeSlot(ox, oy, cell);
+  L.foe = L.me;
 
   if (!stars.length) {
     // Två lager: det bakre driver långsammare och ger djup.
@@ -87,19 +77,12 @@ export function drawFrame(G) {
   drawBackdrop(G ? G.time : 0);
   if (!G) return;
 
-  if (L.mode === 'dual') {
-    drawBoard(G, G.me.board, L.me, false, G);
-    drawBoard(G, G.foe.board, L.foe, true, G);
-    drawSlotLabel(L.me, '🛡 ' + G.me.name, '#4fd8eb', G.me.board);
-    drawSlotLabel(L.foe, '⚔ ' + G.foe.name, '#ff5d73', G.foe.board);
-    drawDivider();
-  } else {
-    const hostile = G.view === 'atk';
-    drawBoard(G, hostile ? G.foe.board : G.me.board, L.me, hostile, G);
-    drawSlotLabel(L.me,
-      hostile ? '⚔ ' + G.foe.name + ' — dina creeps anfaller här' : '🛡 DIN BANA — bygg försvar här',
-      hostile ? '#ff5d73' : '#4fd8eb', hostile ? G.foe.board : G.me.board);
-  }
+  const hostile = G.view === 'atk';
+  drawBoard(G, hostile ? G.foe.board : G.me.board, L.me, hostile, G);
+  drawSlotLabel(L.me,
+    hostile ? '⚔ ' + G.foe.name + ' — dina creeps anfaller här'
+            : '🛡 DIN BANA — dra för att bygga en rad',
+    hostile ? '#ff5d73' : '#4fd8eb', hostile ? G.foe.board : G.me.board);
   drawPost();
 }
 

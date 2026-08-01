@@ -27,6 +27,7 @@ const A = makeSide('A(' + cfgA.nm + ')', cfgA);
 const B = makeSide('B(' + cfgB.nm + ')', cfgB);
 
 const STEP = 1 / 60;
+let prep = ECON.prepTime;
 let time = 0, wave = 0, waveT = ECON.waveInterval, incT = ECON.incInterval;
 const log = [];
 let winner = null;
@@ -42,7 +43,7 @@ while (time < 60 * 30 && !winner) {
 
   for (const [me, foe] of [[A, B], [B, A]]) {
     aiThink({ foe: me, wave }, STEP);
-    while (me.pendingSend.length) {
+    while (prep <= 0 && me.pendingSend.length) {
       const s = me.pendingSend.shift();
       spawn(foe.board, s.key, waveHpMul(wave), s.lv);
       aiNoteIncoming(foe, s.key);

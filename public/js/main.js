@@ -35,7 +35,7 @@ function newMatch({ mode, mapIndex, foeName }) {
   G = {
     mode, mapIndex, map: M,
     time: 0, wave: 0, waveT: ECON.waveInterval, incT: ECON.incInterval,
-    sendCd: 0, speed: 1, paused: false, over: false,
+    sendCd: 0, prep: ECON.prepTime, speed: 1, paused: false, over: false,
     view: 'def', sel: null, buildHint: false, previewRange: 0,
     me: makeSide('DU'),
     foe: makeSide(foeName || M.ai.nm),
@@ -86,6 +86,14 @@ function update(dt) {
     G.wave++;
     UI.banner('VÅG ' + (G.wave + 1), `Alla nya creeps +${Math.round((ECON.waveHp - 1) * 100)} % HP`);
     Audio.sfx.wave(G.wave);
+  }
+
+  // byggfas: ingen får skicka förrän nedräkningen är slut
+  if (G.prep > 0) {
+    const was = Math.ceil(G.prep);
+    G.prep -= dt;
+    if (was > 0 && Math.ceil(G.prep) !== was && Math.ceil(G.prep) <= 5 && G.prep > 0) Audio.sfx.ui();
+    if (G.prep <= 0) { UI.banner('FÖRSTA VÅGEN', 'Creeps släpps lös'); Audio.sfx.wave(0); }
   }
 
   // min sändkö
@@ -170,6 +178,7 @@ function hurtFoe(n) {
 }
 
 function processQueue() {
+  if (G.prep > 0) return;
   while (G.sendCd <= 0 && G.me.queue.length) {
     const key = G.me.queue[0];
     const d = CREEPS[key];
@@ -438,37 +447,78 @@ function leave() {
 /* ============================================================
    Input
    ============================================================ */
+/* Direktbygge. Det finns bara en sak att bygga — en palisad — så en meny
+   mellan varje klick vore bara i vägen när man ska lägga tjugo i rad.
+   Håll och dra för att lägga en hel rad på en gång. */
+let painting = false, lastPaint = null;
+
+function tryBuildAt(cx, cy, quiet) {
+  const b = G.me.board;
+  if (towerAt(b, cx, cy)) return false;
+  const cost = buildCost('wall', b.towers.length);
+  if (G.me.gold < cost) {
+    if (!quiet) { UI.toast('För lite guld'); Audio.sfx.denied(); }
+    return false;
+  }
+  const check = canBuild(b, cx, cy);
+  if (!check.ok) {
+    if (!quiet) { UI.toast(check.why); Audio.sfx.denied(); }
+    return false;
+  }
+  G.me.gold -= cost;
+  b.towers.push({
+    type: 'wall', cx, cy, lv: 0, branch: null,
+    cd: 0, recoil: 0, invested: cost, angle: -1.57, flash: 0,
+  });
+  rebuildSolid(b);
+  addFx(b, 'ring', cx, cy, TOWERS.wall.color, 0.9);
+  Audio.sfx.build();
+  Audio.buzz(8);
+  UI.updateHUD();
+  return true;
+}
+
+function cellFromEvent(e) {
+  const rect = CV.getBoundingClientRect();
+  return R.pickCell(R.L.me, e.clientX - rect.left, e.clientY - rect.top);
+}
+
 CV.addEventListener('pointerdown', e => {
   if (!G || G.over) return;
-  const rect = CV.getBoundingClientRect();
-  const px = e.clientX - rect.left, py = e.clientY - rect.top;
-
-  if (R.L.mode === 'single' && G.view !== 'def') { UI.closeSheets(); return; }
-
-  const hit = R.pickCell(R.L.me, px, py);
+  if (G.view !== 'def') { UI.closeSheets(); return; }
+  const hit = cellFromEvent(e);
   if (!hit) { UI.closeSheets(); return; }
 
-  const b = G.me.board;
-  const tw = towerAt(b, hit.cx, hit.cy);
+  const tw = towerAt(G.me.board, hit.cx, hit.cy);
   if (tw) {
     UI.closeSheets();
     G.sel = { cx: hit.cx, cy: hit.cy, tower: tw };
     UI.openTower(tw);
     return;
   }
-  if (!b.buildable.has(hit.cx + ',' + hit.cy)) {
-    UI.closeSheets();
-    if (b.cells.has(hit.cx + ',' + hit.cy)) UI.toast('Här går vägen');
-    return;
-  }
   UI.closeSheets();
-  G.sel = { cx: hit.cx, cy: hit.cy };
-  UI.openBuild();
+  painting = true;
+  G.buildHint = true;
+  lastPaint = hit;
+  tryBuildAt(hit.cx, hit.cy, false);
 });
+
+CV.addEventListener('pointermove', e => {
+  if (!painting || !G || G.over) return;
+  const hit = cellFromEvent(e);
+  if (!hit) return;
+  if (lastPaint && lastPaint.cx === hit.cx && lastPaint.cy === hit.cy) return;
+  lastPaint = hit;
+  tryBuildAt(hit.cx, hit.cy, true);   // tyst under dragning
+});
+
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+  CV.addEventListener(ev, () => { painting = false; if (G) G.buildHint = false; });
+}
 
 window.addEventListener('resize', () => {
   R.resize();
-  document.body.classList.toggle('dual', R.L.mode === 'dual');
+
 });
 
 document.addEventListener('visibilitychange', () => {
@@ -533,7 +583,7 @@ document.addEventListener('dblclick', e => e.preventDefault(), { passive: false 
 window.NW = { get G() { return G; }, hurtMe, endMatch };
 
 R.initRender(CV);
-document.body.classList.toggle('dual', R.L.mode === 'dual');
+
 document.getElementById('mmName').value = UI.loadName();
 Net.connect({ onMessage: onNetMessage, onStatus: () => {} });
 UI.showMenu('campaign');
