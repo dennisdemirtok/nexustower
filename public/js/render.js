@@ -1,6 +1,7 @@
 import { COLS, ROWS, CREEPS, ARMOR, towerFace, towerStat } from './config.js';
 import { cPos, routeCells } from './board.js';
 import { terrainFor, dropShadow, shade } from './art.js';
+import { spriteFor, drawSprite } from './assets.js';
 
 /* ============================================================
    Rendering.
@@ -216,7 +217,19 @@ function drawGrid(b, s, G) {
      vansinne att rita om varje bildruta. */
   const W = COLS * cell, H = ROWS * cell;
   const hostile = !G;
-  CX.drawImage(terrainFor(b, cell, b.entry[0] * 31 + b.exit[1] * 7 + b.rock.size, hostile), ox, oy, W, H);
+  const groundImg = spriteFor.terrain();
+  if (groundImg) {
+    // Bilden kaklas över fältet så en 1024-ruta räcker till hela banan.
+    const pat = CX.createPattern(groundImg, 'repeat');
+    CX.save();
+    CX.translate(ox, oy);
+    CX.fillStyle = pat;
+    CX.fillRect(0, 0, W, H);
+    if (hostile) { CX.globalCompositeOperation = 'multiply'; CX.fillStyle = 'rgba(190,120,190,.55)'; CX.fillRect(0, 0, W, H); }
+    CX.restore();
+  } else {
+    CX.drawImage(terrainFor(b, cell, b.entry[0] * 31 + b.exit[1] * 7 + b.rock.size, hostile), ox, oy, W, H);
+  }
   CX.strokeStyle = hostile ? 'rgba(255,120,150,.35)' : 'rgba(255,210,150,.35)';
   CX.lineWidth = 2;
   CX.strokeRect(ox, oy, W, H);
@@ -380,6 +393,25 @@ function drawTower(tw, s, hostile, time) {
   const tier = Math.min(2, Math.floor(tw.lv / 2));      // 0 trä, 1 sten, 2 element
 
   dropShadow(CX, CX, x, y + size * 0.34, size * 0.44, size * 0.19);
+
+  const img = spriteFor.tower(tw.type, tw.lv, tw.branch);
+  if (img) {
+    CX.save();
+    CX.translate(x, y);
+    CX.rotate(tw.angle + Math.PI / 2);
+    CX.translate(0, (tw.recoil || 0) * size * 0.1);
+    drawSprite(CX, img, 0, 0, size * 1.18);
+    CX.restore();
+    if (tw.flash > 0.35) {
+      CX.globalCompositeOperation = 'lighter';
+      CX.globalAlpha = tw.flash * 0.5;
+      CX.fillStyle = face.color;
+      CX.beginPath(); CX.arc(x, y, size * 0.4, 0, 7); CX.fill();
+      CX.globalAlpha = 1;
+      CX.globalCompositeOperation = 'source-over';
+    }
+    return;
+  }
 
   // --- sockel ---
   const stone = [
@@ -552,6 +584,17 @@ function drawCreep(c, s, time) {
   dropShadow(CX, CX, x, c._sy + (c.fly ? cell * 0.08 : r * 0.55),
              r * (c.fly ? 0.8 : 0.95), r * (c.fly ? 0.32 : 0.4));
 
+  const cimg = spriteFor.creep(c.type);
+  if (cimg) {
+    CX.save();
+    CX.translate(x, y + wob);
+    if (c.flash > 0) { CX.filter = 'brightness(2.4)'; }
+    drawSprite(CX, cimg, 0, 0, r * 2.4);
+    CX.restore();
+    drawCreepBars(c, s, x, y, r, cell);
+    return;
+  }
+
   CX.save();
   CX.translate(x, y + wob);
 
@@ -634,6 +677,20 @@ function drawCreep(c, s, time) {
   }
   CX.restore();
 
+  drawCreepBars(c, s, x, y, r, cell);
+}
+
+/* Hälsobar, nivåprickar och statusringar — samma oavsett om kroppen kom
+   från en bild eller ritades för hand. */
+function drawCreepBars(c, s, x, y, r, cell) {
+  if (c.slow > 0) {
+    CX.beginPath(); CX.arc(x, y, r + 3.5, 0, 7);
+    CX.strokeStyle = 'rgba(155,216,255,.8)'; CX.lineWidth = 1.5; CX.stroke();
+  }
+  if (c.burnT > 0) {
+    CX.beginPath(); CX.arc(x, y, r + 2.5, 0, 7);
+    CX.strokeStyle = 'rgba(255,107,61,.85)'; CX.lineWidth = 2; CX.stroke();
+  }
   const frac = Math.max(0, c.hp / c.maxHp);
   if (frac < 0.999) {
     const bw = r * 2.4, bh = Math.max(2.5, cell * 0.055);
@@ -650,70 +707,6 @@ function drawCreep(c, s, time) {
       CX.fill();
     }
   }
-}
-
-/* Position beräknas i drawBoard-loopen — vi cachar den på creepen. */
-export function cacheCreepPositions(b, s) {
-  for (const c of b.creeps) {
-    if (c.t < 0) continue;
-    const p = cPos(b, c);
-    c._sx = gx(s, p.x);
-    c._sy = gy(s, p.y);
-  }
-}
-
-function drawShot(sh, s) {
-  const x = gx(s, sh.x), y = gy(s, sh.y);
-  if (sh.trail && sh.trail.length) {
-    CX.strokeStyle = sh.color;
-    CX.globalAlpha = 0.35;
-    CX.lineWidth = 2;
-    CX.beginPath();
-    CX.moveTo(gx(s, sh.trail[0].x), gy(s, sh.trail[0].y));
-    for (const t of sh.trail) CX.lineTo(gx(s, t.x), gy(s, t.y));
-    CX.lineTo(x, y);
-    CX.stroke();
-    CX.globalAlpha = 1;
-  }
-  CX.beginPath();
-  CX.arc(x, y, sh.st && sh.st.splash ? s.cell * 0.11 : s.cell * 0.07, 0, 7);
-  CX.fillStyle = sh.color;
-  CX.shadowColor = sh.color; CX.shadowBlur = 10;
-  CX.fill();
-  CX.shadowBlur = 0;
-}
-
-function drawBolt(bo, s) {
-  CX.strokeStyle = bo.color;
-  CX.globalAlpha = bo.life / 0.2;
-  CX.lineWidth = 2.5;
-  CX.shadowColor = bo.color; CX.shadowBlur = 12;
-  CX.beginPath();
-  bo.pts.forEach((p, i) => {
-    const jx = i ? (Math.random() - 0.5) * 6 : 0, jy = i ? (Math.random() - 0.5) * 6 : 0;
-    const px = gx(s, p.x) + jx, py = gy(s, p.y) + jy;
-    i ? CX.lineTo(px, py) : CX.moveTo(px, py);
-  });
-  CX.stroke();
-  CX.shadowBlur = 0;
-  CX.globalAlpha = 1;
-}
-
-function drawFx(f, s) {
-  const k = f.life / f.max;
-  const x = gx(s, f.x), y = gy(s, f.y);
-  if (f.k === 'ring') {
-    CX.beginPath(); CX.arc(x, y, (1 - k) * f.r * s.cell, 0, 7);
-    CX.strokeStyle = f.color; CX.globalAlpha = k; CX.lineWidth = 2.5; CX.stroke();
-  } else if (f.k === 'boom') {
-    CX.beginPath(); CX.arc(x, y, (1 - k) * f.r * s.cell, 0, 7);
-    CX.fillStyle = f.color; CX.globalAlpha = k * 0.45; CX.fill();
-    CX.globalAlpha = k; CX.strokeStyle = f.color; CX.lineWidth = 1.5; CX.stroke();
-  } else {
-    CX.beginPath(); CX.arc(x, y, s.cell * 0.06 + (1 - k) * s.cell * 0.14, 0, 7);
-    CX.strokeStyle = f.color; CX.globalAlpha = k; CX.lineWidth = 1.5; CX.stroke();
-  }
-  CX.globalAlpha = 1;
 }
 
 function drawPart(p, s) {
