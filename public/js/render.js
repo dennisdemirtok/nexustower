@@ -568,6 +568,22 @@ function shapePath(shape, hg) {
   }
 }
 
+/* Räknar ut var varje creep hamnar på skärmen och cachar det på creepen.
+   Anropas en gång per bana och bildruta, innan de ritas.
+
+   Den här funktionen försvann i en omskrivning medan anropet blev kvar.
+   Resultatet: drawBoard kastade ett fel direkt efter tornen, så creeps,
+   skott, partiklar och effekter ritades aldrig — tornen syntes, resten var
+   osynligt. */
+function cacheCreepPositions(b, s) {
+  for (const c of b.creeps) {
+    if (c.t < 0) continue;
+    const p = cPos(b, c);
+    c._sx = gx(s, p.x);
+    c._sy = gy(s, p.y);
+  }
+}
+
 function drawCreep(c, s, time) {
   const d = CREEPS[c.type];
   const { cell } = s;

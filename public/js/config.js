@@ -18,7 +18,13 @@ export const ECON = {
      per tick, bounty = 4 %. Payback på en sändning är 20 ticks = 5 minuter,
      och eftersom bounty ligger UNDER income lönar det sig alltid att skicka
      själv i stället för att vänta ut motståndaren. */
-  startGold: 100,
+  /* Förhållandet startguld:torn ska vara ~10:1 så öppningen räcker till
+     5-10 torn OCH några sändningar. Jag höjer startguldet i stället för att
+     sänka tornpriset — sänker man tornet blir det plötsligt fem gånger
+     kostnadseffektivare än creepsen, och då rasar hela HP-per-guld-tabellen
+     som är själva matchklockan.
+       500 = 6 torn (300) + 4 får (80) med slack, eller 8 torn + 2 får. */
+  startGold: 500,
   startIncome: 10,
   incInterval: 15,
   incomeRate: 0.05,
@@ -38,6 +44,17 @@ export const ECON = {
   maxSendLv: 5,
   sendUpHp: 0.35,
   sendUpCost: (cost, lv) => Math.round(cost * 4 * Math.pow(1.7, lv)),
+  /* Kalibrering mot labyrinten. Balansekvationen i planen utgår från att en
+     creep är under beskjutning ~12 s (30 s väg, 40 % torntäckning). I en
+     labyrint är vägen 75 rutor och creepen är i eldzonen nästan hela tiden —
+     mätt till ~40 s. Tornen får alltså ut drygt tre gånger så mycket av
+     varje guldkrona som planen räknar med, och därför fastnade matcherna.
+
+     Vi skalar creepsens HP i stället för att röra torntabellen: då bevaras
+     både DPS/guld-trenden och den inbördes HP-per-guld-kurvan mellan
+     tierna, som är det som utgör matchklockan. */
+  mazeHpFactor: 4.2,
+
   lives: 25,
   lifeSteal: true,
   maxLives: 60,
@@ -285,6 +302,8 @@ export function nextStat(tw, branch) {
    ============================================================ */
 export const CREEPS = {
   /* Tolv sändningar i fyra tier som låses upp på TID, inte på inkomst.
+     Tier-tiderna är halverade mot ursprungsplanen (0/2/4/7/10 min) — med
+     de långa tiderna hann försvaret bygga ifatt och matcherna fastnade.
      Det viktiga är HP-per-guld-kurvan: T1 ~1,5-2x, T2 ~2,3x, T3 ~2,8x,
      T4 ~3x. Anfallet blir alltså gradvis billigare än försvaret, och det
      är den glidningen som gör att matchen måste ta slut.
@@ -313,17 +332,17 @@ export const CREEPS = {
   // ---- T2, 3 minuter ----
   ghoul: {
     nm: 'GHOUL', shape: 'blob', color: '#7fb069', cls: 'tung', sprite: 'brute',
-    hp: 280, spd: 1.4, r: 0.27, cost: 120, inc: 6, leak: 1, unlockMin: 3,
+    hp: 280, spd: 1.4, r: 0.27, cost: 120, inc: 6, leak: 1, unlockMin: 2,
     note: 'Standardslitaren i mellanspelet',
   },
   harpya: {
     nm: 'HARPYA', shape: 'wing', color: '#66e0ff', cls: 'flyg', fly: true, sprite: 'drone',
-    hp: 240, spd: 1.7, r: 0.24, cost: 200, inc: 10, leak: 2, unlockMin: 3,
+    hp: 240, spd: 1.7, r: 0.24, cost: 200, inc: 10, leak: 2, unlockMin: 2,
     note: 'FLYG — går rakt över labyrinten',
   },
   shaman: {
     nm: 'SHAMAN', shape: 'blob', color: '#3ddc97', cls: 'tung', sprite: 'regen',
-    hp: 320, spd: 1.3, r: 0.27, cost: 280, inc: 14, leak: 2, unlockMin: 3,
+    hp: 320, spd: 1.3, r: 0.27, cost: 280, inc: 14, leak: 2, unlockMin: 2,
     healAura: 26, healRange: 2.2,
     note: 'Läker alla creeps omkring sig — döda den först',
   },
@@ -331,17 +350,17 @@ export const CREEPS = {
   // ---- T3, 7 minuter ----
   golem: {
     nm: 'GOLEM', shape: 'tank', color: '#b8a48c', cls: 'pans', sprite: 'titan',
-    hp: 1700, spd: 0.95, r: 0.34, cost: 600, inc: 30, leak: 2, unlockMin: 7,
+    hp: 1700, spd: 0.95, r: 0.34, cost: 600, inc: 30, leak: 2, unlockMin: 4,
     note: 'PANSAR — kinetisk och elektrisk studsar av',
   },
   wyvern: {
     nm: 'WYVERN', shape: 'wing', color: '#b57bff', cls: 'flyg', fly: true, sprite: 'brood',
-    hp: 1900, spd: 1.9, r: 0.32, cost: 900, inc: 45, leak: 2, unlockMin: 7,
+    hp: 1900, spd: 1.9, r: 0.32, cost: 900, inc: 45, leak: 2, unlockMin: 4,
     note: 'Snabb FLYG — kräver riktigt luftvärn',
   },
   prastinna: {
     nm: 'PRÄSTINNA', shape: 'blob', color: '#7fe8d0', cls: 'pans', sprite: 'shade',
-    hp: 2800, spd: 1.1, r: 0.30, cost: 1200, inc: 60, leak: 3, unlockMin: 7,
+    hp: 2800, spd: 1.1, r: 0.30, cost: 1200, inc: 60, leak: 3, unlockMin: 4,
     magicImmune: true,
     note: 'Magiimmun: ELD, IS och BLIXT gör 25 % skada',
   },
@@ -349,13 +368,13 @@ export const CREEPS = {
   // ---- T4, 12 minuter ----
   jatte: {
     nm: 'JÄTTE', shape: 'boss', color: '#5bb8e0', cls: 'pans', sprite: 'warden',
-    hp: 9000, spd: 0.85, r: 0.42, cost: 3000, inc: 150, leak: 4, unlockMin: 12,
+    hp: 9000, spd: 0.85, r: 0.42, cost: 3000, inc: 150, leak: 4, unlockMin: 7,
     towerDebuff: 0.35, debuffRange: 2.6,
     note: 'Sänker eldkraften hos torn den passerar med 35 %',
   },
   drake: {
     nm: 'DRAKE', shape: 'wing', color: '#ff8a3d', cls: 'flyg', fly: true, sprite: 'drake',
-    hp: 16000, spd: 1.3, r: 0.44, cost: 5000, inc: 250, leak: 5, unlockMin: 12,
+    hp: 16000, spd: 1.3, r: 0.44, cost: 5000, inc: 250, leak: 5, unlockMin: 7,
     splashResist: 0.5,
     note: 'FLYG · tar bara halv skada av splash',
   },
@@ -363,7 +382,7 @@ export const CREEPS = {
   // ---- Boss, 16 minuter ----
   behemoth: {
     nm: 'BEHEMOTH', shape: 'boss', color: '#ff3b5c', cls: 'pans', sprite: 'boss',
-    hp: 60000, spd: 0.7, r: 0.52, cost: 15000, inc: 750, leak: 8, unlockMin: 16,
+    hp: 60000, spd: 0.7, r: 0.52, cost: 15000, inc: 750, leak: 8, unlockMin: 10,
     deathSpawn: { key: 'far', count: 4 },
     note: 'Släpper fyra FÅR när den dör. Avslutaren.',
   },
