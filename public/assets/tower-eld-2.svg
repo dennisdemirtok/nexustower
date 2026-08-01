@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- ELD steg 2 — sedd rakt uppifrån. Pipan pekar UPPÅT (-Y):
+       spelet roterar hela bilden efter tornets siktriktning.
+       Ljus uppifrån vänster. Ingen markskugga. -->
+  <defs>
+    <linearGradient id="stone" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#b9ac97"/>
+      <stop offset="0.5" stop-color="#7d7263"/>
+      <stop offset="1" stop-color="#3c352c"/>
+    </linearGradient>
+    <radialGradient id="molten" cx="0.42" cy="0.38" r="0.68">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.35" stop-color="#ffb43d"/>
+      <stop offset="0.72" stop-color="#ff5a1a"/>
+      <stop offset="1" stop-color="#8c1b06"/>
+    </radialGradient>
+    <linearGradient id="barrel" x1="0.2" y1="0" x2="0.85" y2="0.4">
+      <stop offset="0" stop-color="#6d6153"/>
+      <stop offset="0.45" stop-color="#4a4138"/>
+      <stop offset="1" stop-color="#241f1a"/>
+    </linearGradient>
+    <radialGradient id="muzzle" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff6d0"/>
+      <stop offset="0.55" stop-color="#ff8a2a"/>
+      <stop offset="1" stop-color="rgba(255,90,20,0)"/>
+    </radialGradient>
+  </defs>
+
+  <g stroke="#1a1410" stroke-width="11" stroke-linejoin="round" stroke-linecap="round">
+    <!-- sockel: sexkantig stenplatta -->
+    <path d="M256 96 L404 180 L404 344 L256 428 L108 344 L108 180 Z" fill="url(#stone)"/>
+
+    <!-- sprickor med lava -->
+    <path d="M140 210 L196 246 L172 300" fill="none" stroke="#ff6a20" stroke-width="9"/>
+    <path d="M372 214 L322 252 L346 306" fill="none" stroke="#ff6a20" stroke-width="9"/>
+
+    <!-- inre ring -->
+    <circle cx="256" cy="262" r="92" fill="#2e2820"/>
+
+    <!-- smält kärna -->
+    <circle cx="256" cy="262" r="70" fill="url(#molten)"/>
+
+    <!-- pipa uppåt -->
+    <path d="M212 244 L212 108 Q212 84 236 84 L276 84 Q300 84 300 108 L300 244 Z" fill="url(#barrel)"/>
+    <path d="M206 150 L306 150" fill="none" stroke="#1a1410" stroke-width="10"/>
+    <path d="M206 196 L306 196" fill="none" stroke="#1a1410" stroke-width="10"/>
+  </g>
+
+  <!-- mynningsglöd, utan kontur -->
+  <circle cx="256" cy="92" r="54" fill="url(#muzzle)"/>
+  <ellipse cx="256" cy="96" rx="26" ry="16" fill="#fff2c0" opacity="0.9"/>
+
+  <!-- glöd och gnistor -->
+  <g fill="#ffcf6a" opacity="0.85">
+    <circle cx="178" cy="336" r="9"/>
+    <circle cx="330" cy="352" r="7"/>
+    <circle cx="300" cy="196" r="6"/>
+  </g>
+
+  <!-- högdagrar på stenen -->
+  <g fill="#ffffff" opacity="0.26">
+    <path d="M120 186 L252 110 L262 124 L132 200 Z"/>
+    <ellipse cx="200" cy="222" rx="26" ry="12" transform="rotate(-32 200 222)"/>
+  </g>
+</svg>

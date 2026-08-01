@@ -18,11 +18,18 @@ export function sprite(name) {
     const v = cache.get(name);
     return v && v._ok ? v : null;
   }
+  /* Provar PNG först, sedan SVG. Målade sprites och handritad vektor kan
+     alltså blandas fritt — och en PNG som läggs in senare ersätter SVG:n
+     utan att något behöver ändras. */
   const img = new Image();
   img.decoding = 'async';
   img._ok = false;
+  let triedSvg = false;
   img.onload = () => { img._ok = true; };
-  img.onerror = () => { cache.set(name, null); };
+  img.onerror = () => {
+    if (!triedSvg) { triedSvg = true; img.src = `/assets/${name}.svg`; return; }
+    cache.set(name, null);
+  };
   img.src = `/assets/${name}.png`;
   cache.set(name, img);
   return null;
