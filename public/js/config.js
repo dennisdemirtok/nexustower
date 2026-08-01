@@ -25,12 +25,11 @@ export const ECON = {
      som är själva matchklockan.
        500 = 6 torn (300) + 4 får (80) med slack, eller 8 torn + 2 får. */
   startGold: 500,
-  /* Basinkomsten måste följa guldskalan. Med startguld 500 och torn för 50
-     gav 10/tick bara 40 guld i minuten — man hade råd med ett torn i minuten
-     och aldrig något över till att skicka. Efter tre minuters test stod
-     inkomsten kvar på 10 och ingen sida hade läckt ett enda liv.
-     30/tick ger 120 i minuten: ett torn OCH ett par sändningar. */
-  startIncome: 30,
+  /* Basinkomsten är golvet som gör att man aldrig står och väntar. 30/tick
+     gav 120 guld i minuten — sex får, alltså ett var tionde sekund. Det
+     räckte inte för att hålla ett flöde igång samtidigt som man bygger.
+     60/tick ger 240 i minuten: fyra torn ELLER tolv får, eller en blandning. */
+  startIncome: 60,
   incInterval: 15,
   incomeRate: 0.07,   // planens egen spak för kortare matcher (payback 3,5 min)
   bountyRate: 0.04,
@@ -49,16 +48,22 @@ export const ECON = {
   maxSendLv: 5,
   sendUpHp: 0.35,
   sendUpCost: (cost, lv) => Math.round(cost * 4 * Math.pow(1.7, lv)),
-  /* Kalibrering mot labyrinten. Balansekvationen i planen utgår från att en
-     creep är under beskjutning ~12 s (30 s väg, 40 % torntäckning). I en
-     labyrint är vägen 75 rutor och creepen är i eldzonen nästan hela tiden —
-     mätt till ~40 s. Tornen får alltså ut drygt tre gånger så mycket av
-     varje guldkrona som planen räknar med, och därför fastnade matcherna.
+  /* Kalibrering mot labyrinten, PER TIER.
+     Först satte jag en platt faktor på 4,2 för att matcherna inte skulle
+     fastna. Det löste sluttempot men förstörde öppningen: ett får fick 126
+     HP och ett nivå-1-torn behövde 12,6 sekunder på det. Man kunde varken
+     bygga tillräckligt eller skicka.
 
-     Vi skalar creepsens HP i stället för att röra torntabellen: då bevaras
-     både DPS/guld-trenden och den inbördes HP-per-guld-kurvan mellan
-     tierna, som är det som utgör matchklockan. */
-  mazeHpFactor: 4.2,
+     Problemet var aldrig T1. Det är sent i matchen försvaret drar ifrån,
+     eftersom torn är permanenta medan creeps förbrukas. Alltså ska bara de
+     senare tierna skalas:
+       T1 orört  -> ett torn dödar ett får på tre sekunder, som det ska
+       T4 x4,5   -> anfallet hinner ikapp det uppbyggda försvaret
+
+     Trappan måste dessutom vara jämn. Med x2,2 på T2 gick ett creep från
+     30 HP till 616 HP på två minuter — tjugo gånger tåligare i ett hopp,
+     och tolv nivå-1-torn tappade tio liv utan att spelaren gjort fel.     */
+  tierHp: { 0: 1.0, 2: 1.3, 4: 2.2, 7: 4.0, 10: 5.0 },
 
   lives: 25,
   lifeSteal: true,
@@ -409,5 +414,9 @@ export const creepUnlocked = (key, seconds) => seconds >= (CREEPS[key].unlockMin
 export const sendUpCost = (key, lv) => ECON.sendUpCost(CREEPS[key].cost, lv);
 export const sendHpMul = lv => Math.pow(1 + ECON.sendUpHp, lv);
 export const waveHpMul = wave => Math.pow(ECON.waveHp, wave);
+
+/* HP-skalan för en creep, satt av dess tier. Nyckeln i tierHp är samma
+   upplåsningstid som creepen har, så tabellen läses direkt. */
+export const tierHpMul = key => ECON.tierHp[CREEPS[key].unlockMin] ?? 1;
 export const buildCost = (key, towerCount) =>
   Math.round(TOWERS[key].lv[0].cost * Math.pow(ECON.buildTax, towerCount));

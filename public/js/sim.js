@@ -1,4 +1,4 @@
-import { CREEPS, ECON, sendHpMul, towerStat, towerFace, dmgMul, creepBounty } from './config.js';
+import { CREEPS, ECON, sendHpMul, towerStat, towerFace, dmgMul, creepBounty, tierHpMul } from './config.js';
 import { cPos, nextStep, progress, distAt } from './board.js';
 import { COLS, ROWS } from './config.js';
 
@@ -8,7 +8,7 @@ let SEQ = 0;
 
 export function spawn(b, type, wave, lv = 0, hpMulExtra = 1) {
   const d = CREEPS[type];
-  const hp = d.hp * ECON.mazeHpFactor * wave * sendHpMul(lv) * hpMulExtra;
+  const hp = d.hp * tierHpMul(type) * wave * sendHpMul(lv) * hpMulExtra;
   const n = d.count || 1;
   for (let i = 0; i < n; i++) {
     b.creeps.push({
