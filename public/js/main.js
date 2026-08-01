@@ -1,7 +1,7 @@
 import {
   MAPS, TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, sendUpCost, creepIncome, waveHpMul, towerStat, towerFace, needsBranch,
-  BRANCH_KEYS, RESEARCH, researchCost, requiredResearch,
+  BRANCH_KEYS, RESEARCH, researchCost, requiredResearch, creepUnlocked,
 } from './config.js';
 import { makeBoard, towerAt, canBuild, rebuildSolid } from './board.js';
 import { spawn, stepBoard, stepRemote, addFx, addFloat, addParts } from './sim.js';
@@ -86,8 +86,10 @@ function update(dt) {
   if (G.waveT <= 0) {
     G.waveT += ECON.waveInterval;
     G.wave++;
-    UI.banner('VÅG ' + (G.wave + 1), `Alla nya creeps +${Math.round((ECON.waveHp - 1) * 100)} % HP`);
-    Audio.sfx.wave(G.wave);
+    if (ECON.waveHp > 1) {
+      UI.banner('VÅG ' + (G.wave + 1), `Alla nya creeps +${Math.round((ECON.waveHp - 1) * 100)} % HP`);
+      Audio.sfx.wave(G.wave);
+    }
   }
 
   // byggfas: ingen får skicka förrän nedräkningen är slut
@@ -179,43 +181,47 @@ function hurtFoe(n) {
   }
 }
 
+/* Kön är redan betald — den styr bara utsläppstakten så att tjugo creeps
+   inte spawnar ovanpå varandra. */
 function processQueue() {
   if (G.prep > 0) return;
   while (G.sendCd <= 0 && G.me.queue.length) {
-    const key = G.me.queue[0];
-    const d = CREEPS[key];
-    if (G.me.income < d.unlock) { G.me.queue.shift(); continue; }
-    if (G.me.gold < d.cost) break;   // stannar kvar i kön tills nästa inkomsttick
-    G.me.queue.shift();
-    G.me.gold -= d.cost;
-    G.me.income += creepIncome(key);
-    G.me.sent++;
+    const { key, lv } = G.me.queue.shift();
     G.sendCd = ECON.sendCooldown;
-    const lv = G.me.sendLv[key];
     if (G.mode === 'campaign') {
       spawn(G.foe.board, key, waveMul(), lv);
-      aiNoteIncoming(G.foe, key);   // så WARDEN kan bygga mot det du faktiskt skickar
+      aiNoteIncoming(G.foe, key);
     } else {
       Net.send({ t: 'send', key, lv, wave: G.wave });
     }
     UI.alertTab('atk');
-    UI.refreshSendbar();
   }
 }
 
 /* ============================================================
    Spelarhandlingar
    ============================================================ */
+/* Betalningen sker direkt vid trycket. Har du guldet får du trycka hur
+   många gånger du vill — kön styr bara i vilken takt de släpps ut, och
+   guldet är enda taket. Att spara ihop och dumpa allt på en gång är ett
+   legitimt drag. */
 function send(key) {
   if (!G || G.over) return;
   const d = CREEPS[key];
-  if (G.me.income < d.unlock) { UI.toast(`Låses upp vid inkomst ${d.unlock}`); Audio.sfx.denied(); return; }
+  if (!creepUnlocked(key, G.time)) {
+    UI.toast(`Låses upp vid ${d.unlockMin} min`);
+    Audio.sfx.denied();
+    return;
+  }
+  if (G.me.gold < d.cost) { UI.toast('För lite guld'); Audio.sfx.denied(); return; }
   if (G.me.queue.length >= ECON.queueMax) { UI.toast('Kön är full'); Audio.sfx.denied(); return; }
-  G.me.queue.push(key);
+  G.me.gold -= d.cost;
+  G.me.income += creepIncome(key);
+  G.me.sent++;
+  G.me.queue.push({ key, lv: G.me.sendLv[key] });
   Audio.sfx.send();
   Audio.buzz(8);
-  processQueue();
-  UI.refreshSendbarState();
+  UI.refreshSendbar();
 }
 
 function upgradeSend(key) {

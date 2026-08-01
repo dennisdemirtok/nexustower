@@ -71,6 +71,7 @@ CREEPS = {
     "creep-titan": "a colossal stone golem with molten cracks, seen from directly above walking downward",
     "creep-warden": "a bulky blue armored guardian beast with a glowing healing rune on its back, seen from directly above walking downward",
     "creep-brood": "a large violet winged broodmother insect with four spread wings, seen from directly above flying",
+    "creep-drake": "a massive orange and red dragon with wide leathery wings and a long tail, seen from directly above flying",
 }
 
 GROUPS = {"terrain": TERRAIN, "towers": TOWERS, "creeps": CREEPS}

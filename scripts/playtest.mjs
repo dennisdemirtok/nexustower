@@ -9,7 +9,7 @@
 
 import {
   MAPS, ECON, CREEPS, CREEP_KEYS, TOWER_KEYS, BASE_LEVELS, MAX_TOWER_LV,
-  buildCost, creepIncome, sendUpCost, towerStat, needsBranch, waveHpMul, BRANCH_KEYS,
+  buildCost, creepIncome, sendUpCost, towerStat, needsBranch, waveHpMul, BRANCH_KEYS, creepUnlocked,
   RESEARCH, researchCost, requiredResearch,
 } from '../public/js/config.js';
 import { makeBoard, canBuild, rebuildSolid, routeCells, nextPlanSpot } from '../public/js/board.js';
@@ -21,9 +21,12 @@ const style = process.argv[3] || 'balanced';
 const M = MAPS[mapIndex];
 
 const STYLES = {
-  balanced: { sendShare: 0.5, towerTarget: 8, reserve: 400, mazeTarget: 40 },
-  rusher:   { sendShare: 0.75, towerTarget: 5, reserve: 200, mazeTarget: 26 },
-  turtle:   { sendShare: 0.25, towerTarget: 11, reserve: 800, mazeTarget: 55 },
+  /* Trösklarna är i guld och måste följa ekonomins skala. Med startguld 100
+     och 10 i inkomst per tick är 400 i reserv detsamma som att aldrig
+     skicka något alls. */
+  balanced: { sendShare: 0.5, towerTarget: 8, reserve: 80, mazeTarget: 40 },
+  rusher:   { sendShare: 0.75, towerTarget: 5, reserve: 35, mazeTarget: 26 },
+  turtle:   { sendShare: 0.25, towerTarget: 11, reserve: 200, mazeTarget: 55 },
 };
 const S = STYLES[style] || STYLES.balanced;
 
@@ -125,9 +128,9 @@ let sendTick = 3;
 function playerSend(dt) {
   sendTick -= dt;
   if (sendTick > 0) return;
-  sendTick = 1 / S.sendShare * 2;
+  sendTick = 1 / S.sendShare * 1.2;
   const opts = CREEP_KEYS
-    .filter(k => P.income >= CREEPS[k].unlock && P.gold - CREEPS[k].cost > S.reserve * 0.5)
+    .filter(k => creepUnlocked(k, time) && P.gold - CREEPS[k].cost >= 20)
     .sort((x, z) => CREEPS[z].cost - CREEPS[x].cost);
   if (opts.length) P.pendingSend.push({ key: opts[0], lv: P.sendLv[opts[0]] });
 }
@@ -151,9 +154,9 @@ while (time < 60 * 30 && !winner) {
   waveT -= STEP;
   if (waveT <= 0) { waveT += ECON.waveInterval; wave++; }
 
-  playerTurn(STEP, wave);
   playerSend(STEP);
-  aiThink({ foe: A, wave, prep }, STEP);
+  playerTurn(STEP, wave);
+  aiThink({ foe: A, wave, prep, time }, STEP);
 
   sendCd = Math.max(0, sendCd - STEP);
   if (prep <= 0 && sendCd <= 0 && P.pendingSend.length) {
@@ -186,7 +189,7 @@ while (time < 60 * 30 && !winner) {
     });
   }
 
-  if (P.gold < 40) brokeTime += STEP; else richTime += STEP;
+  if (P.gold < 50) brokeTime += STEP; else richTime += STEP;
 
   if (Math.abs(time % 60) < STEP / 2) {
     log.push({ t: Math.round(time), wave, P: snap(P), A: snap(A) });
@@ -224,4 +227,4 @@ console.log(`Första läckan: du ${firstLeak.P ? Math.round(firstLeak.P) + 's' :
 console.log(winner ? `\nVINNARE: ${winner} efter ${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`
                    : '\nOAVGJORT efter 30 min — matchen fastnar.');
 console.log(`Du skickade ${P.sent}, läckte ${P.leaked}. AI skickade ${A.sent}, läckte ${A.leaked}.`);
-console.log(`Pank (< 40 guld, kan inte ens lägga en palisad): ${Math.round(100 * brokeTime / (brokeTime + richTime))} % av matchen`);
+console.log(`Pank (< 50 guld, kan inte ens lägga ett pilbågstorn): ${Math.round(100 * brokeTime / (brokeTime + richTime))} % av matchen`);

@@ -2,7 +2,7 @@
    utvecklas. Snabbaste sättet att se om ekonomin skenar eller om försvaret
    är gratis. Kör: node scripts/balance.mjs [banindex] [ai-a] [ai-b] */
 
-import { MAPS, ECON, CREEP_KEYS, waveHpMul } from '../public/js/config.js';
+import { MAPS, ECON, CREEP_KEYS, waveHpMul, creepUnlocked } from '../public/js/config.js';
 import { makeBoard } from '../public/js/board.js';
 import { spawn, stepBoard, towerDps } from '../public/js/sim.js';
 import { initAI, aiThink, aiNoteIncoming } from '../public/js/ai.js';

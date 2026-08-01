@@ -1,7 +1,7 @@
 import {
   TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BRANCH_KEYS, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, sendUpCost, creepIncome, towerStat, needsBranch,
-  RESEARCH, researchCost, requiredResearch,
+  RESEARCH, researchCost, requiredResearch, creepUnlocked,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
 import { canBuild, rebuildSolid, routeCells, nextPlanSpot } from './board.js';
@@ -65,6 +65,7 @@ function valueAgainst(type, lv, branch, prof) {
 export function aiThink(G, dt) {
   const A = G.foe;
   if (!A.cfg) return;
+  A.time = G.time || 0;
   A.think -= dt;
   if (A.think > 0) return;
   A.think = A.cfg.tick;
@@ -158,7 +159,7 @@ function spendOnOffense(A) {
   const reserve = A.gold * cfg.bank;
 
   if (Math.random() < 0.28 * cfg.iq) {
-    const keys = CREEP_KEYS.filter(k => A.sendLv[k] < ECON.maxSendLv && A.income >= CREEPS[k].unlock);
+    const keys = CREEP_KEYS.filter(k => A.sendLv[k] < ECON.maxSendLv && creepUnlocked(k, A.time || 0));
     if (keys.length) {
       const k = keys[Math.floor(Math.random() * keys.length)];
       const c = sendUpCost(k, A.sendLv[k]);
@@ -167,7 +168,7 @@ function spendOnOffense(A) {
   }
 
   const affordable = CREEP_KEYS
-    .filter(k => A.income >= CREEPS[k].unlock)
+    .filter(k => creepUnlocked(k, A.time || 0))
     .filter(k => A.gold - CREEPS[k].cost > reserve)
     .sort((a, b) => CREEPS[b].cost - CREEPS[a].cost);
   if (!affordable.length) return;

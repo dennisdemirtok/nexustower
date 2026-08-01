@@ -2,7 +2,7 @@ import {
   TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, MAPS, ECON, DMG, ARMOR, TYPE_VS,
   buildCost, sendUpCost, creepIncome, MAX_TOWER_LV, BASE_LEVELS,
   towerStat, towerFace, needsBranch, branchKeysFor,
-  RESEARCH, researchCost, requiredResearch, BRANCH_KEYS,
+  RESEARCH, researchCost, requiredResearch, BRANCH_KEYS, creepUnlocked,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
 import * as Audio from './audio.js';
@@ -216,12 +216,12 @@ export function refreshSendbar() {
   if (!G) return;
   for (const el of document.querySelectorAll('.sendbtn')) {
     const key = el.dataset.key, d = CREEPS[key], lv = G.me.sendLv[key];
-    const locked = G.me.income < d.unlock;
+    const locked = !creepUnlocked(key, G.time);
     const pips = `<div class="pips">${Array.from({ length: ECON.maxSendLv },
       (_, i) => `<span class="${i < lv ? 'on' : ''}"></span>`).join('')}</div>`;
     el.innerHTML = locked
       ? `<div class="cls" style="color:${ARMOR[d.cls].color}">${ARMOR[d.cls].glyph}</div>
-         ${creepIcon(key)}<div class="nm">${d.nm}</div><div class="lockmsg">🔒${d.unlock}</div>`
+         ${creepIcon(key)}<div class="nm">${d.nm}</div><div class="lockmsg">🔒${d.unlockMin} min</div>`
       : `<div class="cls" style="color:${ARMOR[d.cls].color}">${ARMOR[d.cls].glyph}</div>
          ${creepIcon(key)}${nameTag(d)}
          <div class="pr">◆${d.cost}</div><div class="in">+${creepIncome(key)} ink</div>${pips}
@@ -236,9 +236,9 @@ export function refreshSendbarState() {
   if (!G) return;
   for (const el of document.querySelectorAll('.sendbtn')) {
     const key = el.dataset.key, d = CREEPS[key];
-    if (G.me.income < d.unlock) continue;
+    if (!creepUnlocked(key, G.time)) continue;
     el.classList.toggle('poor', G.me.gold < d.cost);
-    const q = G.me.queue.filter(x => x === key).length;
+    const q = G.me.queue.filter(x => x.key === key).length;
     const badge = el.querySelector('.qbadge');
     if (badge) {
       badge.style.display = q ? '' : 'none';
@@ -376,14 +376,14 @@ export function openArmory(focusKey) {
     const d = CREEPS[key], lv = G.me.sendLv[key];
     const maxed = lv >= ECON.maxSendLv;
     const cost = sendUpCost(key, lv);
-    const locked = G.me.income < d.unlock;
+    const locked = !creepUnlocked(key, G.time);
     const el = document.createElement('div');
     el.className = 'armcard' + (maxed ? ' max' : '') + ((locked || G.me.gold < cost) ? ' poor' : '');
     el.style.outline = focusKey === key ? '1px solid var(--amber)' : '';
     el.innerHTML = `${creepIcon(key, 22)}
       <div class="nm">${d.nm}</div>
       ${clsChip(d.cls)}
-      <div class="lv">${locked ? '🔒 inkomst ' + d.unlock : 'nivå ' + lv + '/' + ECON.maxSendLv}</div>
+      <div class="lv">${locked ? '🔒 ' + d.unlockMin + ' min' : 'nivå ' + lv + '/' + ECON.maxSendLv}</div>
       <div class="note">${d.note}</div>
       <div class="pr">${maxed ? 'MAX' : locked ? '—' : '◆' + cost}</div>
       <div class="pips">${Array.from({ length: ECON.maxSendLv }, (_, i) => `<span class="${i < lv ? 'on' : ''}"></span>`).join('')}</div>`;

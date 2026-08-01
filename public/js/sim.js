@@ -1,4 +1,4 @@
-import { CREEPS, sendHpMul, towerStat, towerFace, dmgMul } from './config.js';
+import { CREEPS, sendHpMul, towerStat, towerFace, dmgMul, creepBounty } from './config.js';
 import { cPos, nextStep, progress, distAt } from './board.js';
 import { COLS, ROWS } from './config.js';
 
@@ -23,9 +23,11 @@ export function spawn(b, type, wave, lv = 0, hpMulExtra = 1) {
       t: -i * 0.5 - Math.random() * 0.3,
       hp, maxHp: hp,
       spd: d.spd, slow: 0, slowT: 0, r: d.r,
-      burn: 0, burnT: 0,
+      burn: 0, burnT: 0, dbuff: 0,
+      magicImmune: !!d.magicImmune,
+      splashResist: d.splashResist || 0,
       regen: (d.regen || 0) * wave * sendHpMul(lv),
-      bounty: Math.round(d.bounty * (1 + lv * 0.3) * Math.min(3, wave)),
+      bounty: creepBounty(type) * (1 + lv * 0.3),
       leak: d.leak,
       wob: Math.random() * 6.28, bob: Math.random() * 6.28,
       flash: 0, dead: false,
@@ -36,16 +38,22 @@ export function spawn(b, type, wave, lv = 0, hpMulExtra = 1) {
 /* Skadeberäkning: typ mot pansarklass.
    GAUSS (trueDmg) går utanför tabellen helt.
    LUFTVÄRN (airBonus) lägger på en extra faktor mot FLYG.        */
-export function effective(amount, st, cls) {
+const MAGIC = new Set(['ter', 'kry', 'ele']);
+
+export function effective(amount, st, cls, c) {
   if (st && st.trueDmg) return amount;
   let m = dmgMul(st && st.dmgType, cls);
   if (st && st.airBonus && cls === 'flyg') m *= st.airBonus;
+  // PRÄSTINNA: eld, is och blixt biter knappt.
+  if (c && c.magicImmune && st && MAGIC.has(st.dmgType)) m *= 0.25;
+  // DRAKE: halv skada från sprängverkan.
+  if (c && c.splashResist && st && st.splash) m *= 1 - c.splashResist;
   return amount * m;
 }
 
 export function damage(b, c, amount, st, hooks) {
   if (c.dead) return 0;
-  const dealt = effective(amount, st, c.cls);
+  const dealt = effective(amount, st, c.cls, c);
   c.hp -= dealt;
   c.flash = 1;
   if (c.hp <= 0) {
@@ -53,6 +61,17 @@ export function damage(b, c, amount, st, hooks) {
     const p = cPos(b, c);
     addFx(b, 'boom', p.x, p.y, CREEPS[c.type].color, 0.55 + c.r);
     addParts(b, p.x, p.y, c.r > 0.3 ? 12 : 7, CREEPS[c.type].color, 2.6 + c.r * 3);
+    // BEHEMOTH lämnar en avskedspresent.
+    const ds = CREEPS[c.type].deathSpawn;
+    if (ds) {
+      for (let i = 0; i < ds.count; i++) {
+        spawn(b, ds.key, 1, c.lv);
+        const n = b.creeps[b.creeps.length - 1];
+        n.x = p.x + (Math.random() - 0.5) * 0.8;
+        n.y = p.y + (Math.random() - 0.5) * 0.8;
+        n.t = 0;
+      }
+    }
     if (hooks.onKill) hooks.onKill(c, p);
   }
   return dealt;
@@ -114,6 +133,7 @@ function fire(b, tw, dt, hooks) {
   if (tw.cd > 0) return;
 
   const st = statOf(tw);
+  if (tw.dbuff > 0) st.dmg *= 1 - tw.dbuff;
   const picks = targetsInRange(b, tw, st, st.multi || 1);
   if (!picks.length) return;
 
@@ -286,7 +306,33 @@ function stepFx(b, dt) {
   b.floats = b.floats.filter(f => f.life > 0);
 }
 
+/* Auror: SHAMAN läker allt omkring sig, JÄTTE sänker eldkraften hos torn
+   den passerar. Båda räknas om en gång per steg i stället för per par. */
+function stepAuras(b, dt) {
+  for (const tw of b.towers) tw.dbuff = 0;
+  for (const c of b.creeps) {
+    if (c.dead || c.t < 0) continue;
+    const d = CREEPS[c.type];
+    const p = cPos(b, c);
+    if (d.healAura) {
+      const r2 = d.healRange * d.healRange;
+      for (const o of b.creeps) {
+        if (o.dead || o === c || o.hp >= o.maxHp) continue;
+        const q = cPos(b, o);
+        if (dist2(p.x, p.y, q.x, q.y) <= r2) o.hp = Math.min(o.maxHp, o.hp + d.healAura * dt);
+      }
+    }
+    if (d.towerDebuff) {
+      const r2 = d.debuffRange * d.debuffRange;
+      for (const tw of b.towers) {
+        if (dist2(p.x, p.y, tw.cx, tw.cy) <= r2) tw.dbuff = Math.max(tw.dbuff, d.towerDebuff);
+      }
+    }
+  }
+}
+
 export function stepBoard(b, dt, hooks = {}) {
+  stepAuras(b, dt);
   for (const tw of b.towers) fire(b, tw, dt, hooks);
   stepShots(b, dt, hooks);
   stepCreeps(b, dt, hooks);

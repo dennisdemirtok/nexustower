@@ -7,6 +7,8 @@
    skillnaden växa fram.
    ============================================================ */
 
+import { CREEPS } from './config.js';
+
 const cache = new Map();
 let enabled = true;
 
@@ -37,14 +39,16 @@ export function sprite(name) {
 
 export const spriteFor = {
   terrain: () => sprite('terrain-ground'),
-  /* Tornen: trä och sten är gemensamma, sedan två steg per element.
-     Steg 1 = nivå 3–4, steg 2 = nivå 5–6. */
+  /* Tre pilbågsnivåer delar två bilder, sedan två steg per element:
+     nivå 4-5 = steg 1, nivå 6-7 = steg 2. */
   tower(type, lv, branch) {
-    if (lv === 0) return sprite('tower-wood');
-    if (lv === 1) return sprite('tower-stone');
-    return sprite(`tower-${branch || 'eld'}-${lv >= 4 ? 2 : 1}`);
+    if (lv <= 0) return sprite('tower-wood');
+    if (lv <= 2) return sprite('tower-stone');
+    return sprite(`tower-${branch || 'eld'}-${lv >= 5 ? 2 : 1}`);
   },
-  creep: key => sprite(`creep-${key}`),
+  /* Creepen pekar ut sin bild själv, så flera creeps kan dela sprite
+     och namnbyten i speldatan inte kräver att filer döps om. */
+  creep: key => sprite(`creep-${(CREEPS[key] && CREEPS[key].sprite) || key}`),
   panel: () => sprite('ui-panel'),
 };
 

@@ -14,44 +14,33 @@ export const ROWS = 16;
    Nu: inkomst = 5% av creep-kostnaden, global sändcooldown, och
    torn som skalar ~2x DPS per nivå i sex nivåer.                     */
 export const ECON = {
-  /* Guldskalan är medvetet "stor" (hundratal, inte tiotal). Med små tal blev
-     inkomsten per creep 1 för både SVÄRM och GRUNT efter avrundning, och då
-     försvinner hela valet mellan billig och dyr creep. */
-  startGold: 800,
-  startIncome: 120,      // guld per inkomsttick
-
-  /* 15 sekunder, som i Line Tower Wars. Med 5 s droppade det in pengar
-     hela tiden och man hann aldrig bli fattig — inget tryck, inget val.
-     Nu kommer en klumpsumma, man gör av med den, och sedan står man där
-     och tittar på nedräkningen medan creepsen kommer. Det är tempot. */
+  /* Kalibrerat mot Reforged-proportionerna: income = 5 % av sändkostnaden
+     per tick, bounty = 4 %. Payback på en sändning är 20 ticks = 5 minuter,
+     och eftersom bounty ligger UNDER income lönar det sig alltid att skicka
+     själv i stället för att vänta ut motståndaren. */
+  startGold: 100,
+  startIncome: 10,
   incInterval: 15,
+  incomeRate: 0.05,
+  bountyRate: 0.04,
 
-  /* Byggfas innan första creepen får skickas. Utan den läcker man på nio
-     sekunder — man hinner inte lägga en enda rad. WC3-TD:er har samma
-     nedräkning innan våg ett. */
+  /* Ingen kö-gräns. Har du sparat ihop guldet ska du kunna trycka tjugo
+     gånger och släppa allt på en gång — att spara och sedan dumpa är ett
+     legitimt drag, inte något spelet ska hindra. Guldet är enda taket.
+     Betalningen sker direkt vid trycket; kön styr bara utsläppstakten. */
+  queueMax: 60,
+  sendCooldown: 0.22,
+
   prepTime: 25,
-  sendCooldown: 1.0,     // sekunder mellan sändningar (kön hanterar resten)
-  queueMax: 6,
-  /* Ingen byggskatt längre. I en labyrint SKA man spamma billiga
-     byggnader — det är så man ritar vägen. En skatt som gjorde det 7 gånger
-     dyrare vid 40 torn hade dödat hela mekaniken. Guldet är gränsen. */
   buildTax: 1.0,
-  waveInterval: 30,      // sekunder mellan HP-vågor
-  waveHp: 1.26,          // HP-multiplikator per våg
+  waveInterval: 30,
+  waveHp: 1.0,           // HP-trappan ligger i creepstierna, inte i vågor
   maxSendLv: 5,
-  sendUpHp: 0.35,        // +35% HP per nivå på den creeptypen
+  sendUpHp: 0.35,
   sendUpCost: (cost, lv) => Math.round(cost * 4 * Math.pow(1.7, lv)),
   lives: 25,
-
-  /* Livstöld, som i LTW: den som läcker förlorar liv OCH den som skickade
-     creepen vinner lika många. Summan liv i matchen är konstant, så partiet
-     blir en dragkamp som faktiskt tar slut i stället för två parallella
-     nedräkningar. Det är därför WC3-spelare kan stå på 83 liv mot 13.      */
   lifeSteal: true,
   maxLives: 60,
-
-  /* Högt återköp: labyrinten ska byggas om under matchens gång.
-     "Spamma grundbyggnader, sälj dem senare" är standardöppningen i LTW. */
   sellRate: 0.85,
 };
 
@@ -157,12 +146,13 @@ export const MAPS = [
    ============================================================ */
 export const TOWERS = {
   wall: {
-    name: 'PALISAD', color: '#8a93b8', shape: 'block', dmg: 'kin',
+    name: 'PILBÅGSTORN', color: '#8a93b8', shape: 'block', dmg: 'kin',
     tag: 'Billig · bygger labyrinten',
-    desc: 'Spärr med en nypa skada. Bygg många, uppgradera de som står bra.',
+    desc: 'Grundbygget. Spamma dem för att rita vägen, uppgradera de som står bra.',
     lv: [
-      { cost: 40,  dmg: 6,  rate: 1.2, range: 1.5 },
-      { cost: 110, dmg: 18, rate: 1.0, range: 1.8 },
+      { cost: 50,  dmg: 8,  rate: 0.80, range: 1.7 },
+      { cost: 150, dmg: 29, rate: 0.70, range: 2.0 },
+      { cost: 300, dmg: 66, rate: 0.60, range: 2.3 },
     ],
     branches: {
       eld: {
@@ -170,10 +160,10 @@ export const TOWERS = {
         tag: 'Splash + brand',
         desc: 'Träffar allt i en radie och sätter eld som tickar i 3 s.',
         lv: [
-          { cost: 320,  dmg: 60,  rate: 1.00, range: 2.3, splash: 1.10, burn: 25,  burnT: 3 },
-          { cost: 700,  dmg: 130, rate: 0.95, range: 2.5, splash: 1.20, burn: 60,  burnT: 3 },
-          { cost: 1500, dmg: 280, rate: 0.90, range: 2.7, splash: 1.35, burn: 140, burnT: 3 },
-          { cost: 3200, dmg: 620, rate: 0.85, range: 2.9, splash: 1.50, burn: 320, burnT: 3 },
+          { cost: 150,   dmg: 109,  rate: 0.95, range: 2.5, splash: 1.15, burn: 30,   burnT: 3 },
+          { cost: 1500,  dmg: 437,  rate: 0.95, range: 2.7, splash: 1.30, burn: 120,  burnT: 3 },
+          { cost: 4000,  dmg: 1330, rate: 0.95, range: 2.9, splash: 1.45, burn: 360,  burnT: 3 },
+          { cost: 12000, dmg: 4085, rate: 0.95, range: 3.2, splash: 1.65, burn: 1100, burnT: 3 },
         ],
       },
       is: {
@@ -181,21 +171,21 @@ export const TOWERS = {
         tag: 'Bromsar allt',
         desc: 'Upp till 72 % långsammare. Ett IS-torn förlänger hela labyrinten.',
         lv: [
-          { cost: 320,  dmg: 34,  rate: 0.80, range: 2.3, slow: 0.42, slowT: 1.7 },
-          { cost: 700,  dmg: 74,  rate: 0.72, range: 2.5, slow: 0.52, slowT: 2.0 },
-          { cost: 1500, dmg: 160, rate: 0.65, range: 2.7, slow: 0.62, slowT: 2.3 },
-          { cost: 3200, dmg: 350, rate: 0.58, range: 2.9, slow: 0.72, slowT: 2.6 },
+          { cost: 150,   dmg: 86,   rate: 0.75, range: 2.5, slow: 0.45, slowT: 1.8 },
+          { cost: 1500,  dmg: 345,  rate: 0.75, range: 2.7, slow: 0.55, slowT: 2.1 },
+          { cost: 4000,  dmg: 1050, rate: 0.75, range: 2.9, slow: 0.64, slowT: 2.4 },
+          { cost: 12000, dmg: 3225, rate: 0.75, range: 3.2, slow: 0.72, slowT: 2.7 },
         ],
       },
       blixt: {
         name: 'BLIXT', color: '#a78bfa', shape: 'bolt', dmg: 'ele',
         tag: 'Kedja mellan mål',
-        desc: 'Hoppar upp till åtta gånger. Raderar svärmar och drönare.',
+        desc: 'Hoppar upp till åtta gånger. Raderar svärmar och flygande flockar.',
         lv: [
-          { cost: 320,  dmg: 46,  rate: 1.00, range: 2.5, chain: 3 },
-          { cost: 700,  dmg: 100, rate: 0.95, range: 2.7, chain: 4 },
-          { cost: 1500, dmg: 215, rate: 0.88, range: 2.9, chain: 6 },
-          { cost: 3200, dmg: 470, rate: 0.80, range: 3.2, chain: 8 },
+          { cost: 150,   dmg: 115,  rate: 1.00, range: 2.6, chain: 3 },
+          { cost: 1500,  dmg: 460,  rate: 1.00, range: 2.8, chain: 5 },
+          { cost: 4000,  dmg: 1400, rate: 1.00, range: 3.0, chain: 6 },
+          { cost: 12000, dmg: 4300, rate: 1.00, range: 3.3, chain: 8 },
         ],
       },
       ljus: {
@@ -203,21 +193,21 @@ export const TOWERS = {
         tag: 'Lång räckvidd · luftvärn',
         desc: 'Täcker halva fältet och får bonus mot FLYG.',
         lv: [
-          { cost: 320,  dmg: 95,  rate: 1.30, range: 3.8 },
-          { cost: 700,  dmg: 205, rate: 1.20, range: 4.2, airBonus: 1.6 },
-          { cost: 1500, dmg: 440, rate: 1.10, range: 4.6, airBonus: 1.8 },
-          { cost: 3200, dmg: 950, rate: 1.00, range: 5.0, airBonus: 2.0 },
+          { cost: 150,   dmg: 144,  rate: 1.25, range: 3.9 },
+          { cost: 1500,  dmg: 575,  rate: 1.25, range: 4.3, airBonus: 1.7 },
+          { cost: 4000,  dmg: 1750, rate: 1.25, range: 4.7, airBonus: 1.9 },
+          { cost: 12000, dmg: 5375, rate: 1.25, range: 5.2, airBonus: 2.1 },
         ],
       },
       morker: {
         name: 'MÖRKER', color: '#c05be0', shape: 'star', dmg: 'spr',
         tag: 'Stor sprängradie',
-        desc: 'Dubbel radie mot slutet, och på maxnivå struntar den i pansar helt.',
+        desc: 'Dubbel radie mot slutet, och på sista nivån struntar den i pansar helt.',
         lv: [
-          { cost: 320,  dmg: 70,  rate: 1.10, range: 2.2, splash: 1.30 },
-          { cost: 700,  dmg: 150, rate: 1.05, range: 2.4, splash: 1.50 },
-          { cost: 1500, dmg: 320, rate: 1.00, range: 2.6, splash: 1.75 },
-          { cost: 3200, dmg: 700, rate: 0.95, range: 2.8, splash: 2.00, trueDmg: true },
+          { cost: 150,   dmg: 127,  rate: 1.10, range: 2.3, splash: 1.35 },
+          { cost: 1500,  dmg: 506,  rate: 1.10, range: 2.5, splash: 1.60 },
+          { cost: 4000,  dmg: 1540, rate: 1.10, range: 2.7, splash: 1.85 },
+          { cost: 12000, dmg: 4730, rate: 1.10, range: 3.0, splash: 2.10, trueDmg: true },
         ],
       },
     },
@@ -225,8 +215,8 @@ export const TOWERS = {
 };
 
 export const TOWER_KEYS = Object.keys(TOWERS);
-export const BASE_LEVELS = 2;   // TRÄ och STEN innan elementvalet
-export const MAX_TOWER_LV = 6;
+export const BASE_LEVELS = 3;   // tre pilbågsnivåer innan elementvalet
+export const MAX_TOWER_LV = 7;
 /* ============================================================
    ELEMENTFORSKNING
    Grundloopen från Element TD: bygg bastorn → forska fram element →
@@ -238,10 +228,10 @@ export const MAX_TOWER_LV = 6;
    ============================================================ */
 export const RESEARCH = {
   maxLevel: 3,
-  cost: [350, 1400, 3600],          // kostnad för nivå 1, 2, 3
+  cost: [200, 800, 2500],           // kostnad för nivå 1, 2, 3
   /* Vilken forskningsnivå tornet kräver för att nå respektive nivå.
      Index = tornets nivå (0-baserad). Trä och sten kräver ingenting. */
-  requires: [0, 0, 1, 1, 2, 3],
+  requires: [0, 0, 0, 1, 1, 2, 3],
 };
 
 export const researchCost = lv => RESEARCH.cost[lv] ?? Infinity;
@@ -294,69 +284,101 @@ export function nextStat(tw, branch) {
    Med en enhetlig procent fanns det valet inte alls.
    ============================================================ */
 export const CREEPS = {
-  swarm: {
-    nm: 'SVÄRM', shape: 'blob', color: '#ff9d54', cls: 'latt',
-    hp: 14, spd: 2.1, r: 0.15, cost: 64, inc: 14, bounty: 8, leak: 1, count: 4, unlock: 0,
-    note: '4 st · bäst inkomst per guld',
+  /* Tolv sändningar i fyra tier som låses upp på TID, inte på inkomst.
+     Det viktiga är HP-per-guld-kurvan: T1 ~1,5-2x, T2 ~2,3x, T3 ~2,8x,
+     T4 ~3x. Anfallet blir alltså gradvis billigare än försvaret, och det
+     är den glidningen som gör att matchen måste ta slut.
+
+     inc = 5 % av kostnaden, bounty = 4 %. Bounty ligger medvetet UNDER
+     income — annars lönar det sig att sitta still och låta motståndaren
+     mata en med guld, och spelet blir passivt. */
+
+  // ---- T1, från start ----
+  far: {
+    nm: 'FÅR', shape: 'blob', color: '#e8e2d0', cls: 'latt', sprite: 'swarm',
+    hp: 30, spd: 1.6, r: 0.20, cost: 20, inc: 1, leak: 1, unlockMin: 0,
+    note: 'Basen. Billigast vägen till inkomst.',
   },
-  grunt: {
-    nm: 'GRUNT', shape: 'blob', color: '#ff5d73', cls: 'tung',
-    hp: 60, spd: 1.5, r: 0.25, cost: 96, inc: 19, bounty: 20, leak: 1, unlock: 0,
-    note: 'Allround · straffar KINETISK och ELEKTRISK',
+  varg: {
+    nm: 'VARG', shape: 'dart', color: '#9aa7c0', cls: 'latt', sprite: 'runner',
+    hp: 45, spd: 2.0, r: 0.20, cost: 40, inc: 2, leak: 1, unlockMin: 0,
+    note: '25 % snabbare — hinner förbi långsamma torn',
   },
-  runner: {
-    nm: 'LÖPARE', shape: 'dart', color: '#ffd166', cls: 'latt',
-    hp: 34, spd: 3.1, r: 0.20, cost: 120, inc: 22, bounty: 20, leak: 1, unlock: 270,
-    note: 'Springer förbi långsamma torn',
-  },
-  regen: {
-    nm: 'REGEN', shape: 'blob', color: '#3ddc97', cls: 'tung',
-    hp: 140, spd: 1.4, r: 0.27, cost: 220, inc: 36, bounty: 40, leak: 2, regen: 10, unlock: 520,
-    note: 'Läker 10 HP/s — kräver burstskada',
-  },
-  drone: {
-    nm: 'DRÖNARE', shape: 'wing', color: '#66e0ff', cls: 'flyg', fly: true,
-    hp: 85, spd: 1.75, r: 0.22, cost: 260, inc: 42, bounty: 46, leak: 1, count: 2, unlock: 780,
-    note: '2 st · flyger RAKT över banan och struntar i vägen',
-  },
-  brute: {
-    nm: 'BJÄSSE', shape: 'tank', color: '#c05be0', cls: 'pans',
-    hp: 300, spd: 1.0, r: 0.34, cost: 320, inc: 46, bounty: 56, leak: 2, unlock: 840,
-    note: 'PANSAR — KINETISK och ELEKTRISK studsar av',
-  },
-  boss: {
-    nm: 'BOSS', shape: 'boss', color: '#ff3b5c', cls: 'pans',
-    hp: 1700, spd: 0.8, r: 0.42, cost: 880, inc: 105, bounty: 180, leak: 3, unlock: 1680,
-    note: 'PANSAR · tar 3 liv — ren press, sämst inkomst',
+  vildsvin: {
+    nm: 'VILDSVIN', shape: 'tank', color: '#a9713f', cls: 'tung', sprite: 'grunt',
+    hp: 130, spd: 1.15, r: 0.26, cost: 60, inc: 3, leak: 1, unlockMin: 0,
+    note: 'Långsam tank. Bäst HP per guld i T1.',
   },
 
-  /* Sena creeps. Utan dem tar trappan slut efter BOSS och man fastnar i
-     att skicka samma sak i tio minuter — det var den verkliga bristen. */
-  shade: {
-    nm: 'SKUGGA', shape: 'dart', color: '#7fe8d0', cls: 'latt',
-    hp: 620, spd: 3.4, r: 0.22, cost: 1150, inc: 130, bounty: 210, leak: 2, unlock: 2400,
-    note: 'Extremt snabb — hinner förbi långsamma torn',
+  // ---- T2, 3 minuter ----
+  ghoul: {
+    nm: 'GHOUL', shape: 'blob', color: '#7fb069', cls: 'tung', sprite: 'brute',
+    hp: 280, spd: 1.4, r: 0.27, cost: 120, inc: 6, leak: 1, unlockMin: 3,
+    note: 'Standardslitaren i mellanspelet',
   },
-  warden: {
-    nm: 'VÄKTARE', shape: 'blob', color: '#5bb8e0', cls: 'tung',
-    hp: 2600, spd: 1.15, r: 0.32, cost: 1600, inc: 175, bounty: 300, leak: 3, regen: 40, unlock: 3200,
-    note: 'TUNG med kraftig läkning — kräver rå burst',
+  harpya: {
+    nm: 'HARPYA', shape: 'wing', color: '#66e0ff', cls: 'flyg', fly: true, sprite: 'drone',
+    hp: 240, spd: 1.7, r: 0.24, cost: 200, inc: 10, leak: 2, unlockMin: 3,
+    note: 'FLYG — går rakt över labyrinten',
   },
-  brood: {
-    nm: 'RUVARE', shape: 'wing', color: '#b57bff', cls: 'flyg', fly: true,
-    hp: 1450, spd: 1.6, r: 0.3, cost: 2100, inc: 220, bounty: 380, leak: 2, count: 2, unlock: 4400,
-    note: '2 st · tung FLYG som struntar i labyrinten',
+  shaman: {
+    nm: 'SHAMAN', shape: 'blob', color: '#3ddc97', cls: 'tung', sprite: 'regen',
+    hp: 320, spd: 1.3, r: 0.27, cost: 280, inc: 14, leak: 2, unlockMin: 3,
+    healAura: 26, healRange: 2.2,
+    note: 'Läker alla creeps omkring sig — döda den först',
   },
-  titan: {
-    nm: 'TITAN', shape: 'boss', color: '#ff8a3d', cls: 'pans',
-    hp: 9000, spd: 0.7, r: 0.48, cost: 3400, inc: 330, bounty: 620, leak: 5, unlock: 6000,
-    note: 'PANSAR · tar 5 liv — sista ordet i en lång match',
+
+  // ---- T3, 7 minuter ----
+  golem: {
+    nm: 'GOLEM', shape: 'tank', color: '#b8a48c', cls: 'pans', sprite: 'titan',
+    hp: 1700, spd: 0.95, r: 0.34, cost: 600, inc: 30, leak: 2, unlockMin: 7,
+    note: 'PANSAR — kinetisk och elektrisk studsar av',
+  },
+  wyvern: {
+    nm: 'WYVERN', shape: 'wing', color: '#b57bff', cls: 'flyg', fly: true, sprite: 'brood',
+    hp: 1900, spd: 1.9, r: 0.32, cost: 900, inc: 45, leak: 2, unlockMin: 7,
+    note: 'Snabb FLYG — kräver riktigt luftvärn',
+  },
+  prastinna: {
+    nm: 'PRÄSTINNA', shape: 'blob', color: '#7fe8d0', cls: 'pans', sprite: 'shade',
+    hp: 2800, spd: 1.1, r: 0.30, cost: 1200, inc: 60, leak: 3, unlockMin: 7,
+    magicImmune: true,
+    note: 'Magiimmun: ELD, IS och BLIXT gör 25 % skada',
+  },
+
+  // ---- T4, 12 minuter ----
+  jatte: {
+    nm: 'JÄTTE', shape: 'boss', color: '#5bb8e0', cls: 'pans', sprite: 'warden',
+    hp: 9000, spd: 0.85, r: 0.42, cost: 3000, inc: 150, leak: 4, unlockMin: 12,
+    towerDebuff: 0.35, debuffRange: 2.6,
+    note: 'Sänker eldkraften hos torn den passerar med 35 %',
+  },
+  drake: {
+    nm: 'DRAKE', shape: 'wing', color: '#ff8a3d', cls: 'flyg', fly: true, sprite: 'drake',
+    hp: 16000, spd: 1.3, r: 0.44, cost: 5000, inc: 250, leak: 5, unlockMin: 12,
+    splashResist: 0.5,
+    note: 'FLYG · tar bara halv skada av splash',
+  },
+
+  // ---- Boss, 16 minuter ----
+  behemoth: {
+    nm: 'BEHEMOTH', shape: 'boss', color: '#ff3b5c', cls: 'pans', sprite: 'boss',
+    hp: 60000, spd: 0.7, r: 0.52, cost: 15000, inc: 750, leak: 8, unlockMin: 16,
+    deathSpawn: { key: 'far', count: 4 },
+    note: 'Släpper fyra FÅR när den dör. Avslutaren.',
   },
 };
 
 export const CREEP_KEYS = Object.keys(CREEPS);
 
 export const creepIncome = key => CREEPS[key].inc;
+/* Bounty räknas ur kostnaden i stället för att skrivas per creep. Med
+   handskrivna heltal blev FÅR 5 % i stället för 4 % vid avrundning, och då
+   bryts regeln att bounty alltid ska ligga under income. */
+export const creepBounty = key => CREEPS[key].cost * ECON.bountyRate;
+/* Tier låses upp på matchtid, inte på inkomst — då kommer trappan i samma
+   takt för båda spelarna oavsett hur de spelat. */
+export const creepUnlocked = (key, seconds) => seconds >= (CREEPS[key].unlockMin || 0) * 60;
 export const sendUpCost = (key, lv) => ECON.sendUpCost(CREEPS[key].cost, lv);
 export const sendHpMul = lv => Math.pow(1 + ECON.sendUpHp, lv);
 export const waveHpMul = wave => Math.pow(ECON.waveHp, wave);
