@@ -2,6 +2,7 @@ import {
   TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, MAPS, ECON, DMG, ARMOR, TYPE_VS,
   buildCost, sendUpCost, creepIncome, MAX_TOWER_LV, BASE_LEVELS,
   towerStat, towerFace, needsBranch, branchKeysFor,
+  RESEARCH, researchCost, requiredResearch, BRANCH_KEYS,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
 import * as Audio from './audio.js';
@@ -19,6 +20,7 @@ export function initUI(handlers) {
   $('pauseBtn').addEventListener('click', () => H.togglePause());
   $('speedBtn').addEventListener('click', () => H.cycleSpeed());
   $('armoryBtn').addEventListener('click', () => openArmory());
+  $('researchBtn').addEventListener('click', () => openResearch());
   $('infoBtn').addEventListener('click', () => openInfo());
   $('sheetScrim').addEventListener('click', () => closeSheets());
 
@@ -248,7 +250,7 @@ export function refreshSendbarState() {
 }
 
 /* ============ sheets ============ */
-const sheets = () => [$('buildSheet'), $('upSheet'), $('armorySheet'), $('infoSheet')];
+const sheets = () => [$('buildSheet'), $('upSheet'), $('armorySheet'), $('infoSheet'), $('researchSheet')];
 
 function openSheet(el) {
   const wasOpen = el.classList.contains('open');
@@ -293,6 +295,8 @@ export function openTower(tw) {
   const nxt = tw.lv + 1 < MAX_TOWER_LV && !atFork ? towerStat(tw.type, tw.lv + 1, tw.branch) : null;
   const sell = Math.floor(tw.invested * ECON.sellRate);
   const dpsNow = towerDps(tw.type, tw.lv, tw.branch);
+  const needLv = requiredResearch(tw.lv + 1);
+  const hasResearch = !tw.branch || (G.me.research[tw.branch] || 0) >= needLv;
 
   const stat = (label, a, b, suffix = '') =>
     `<span>${label} <b>${a}${suffix}</b>${b !== undefined && b !== null && b !== a ? ` <span class="up">→${b}${suffix}</span>` : ''}</span>`;
@@ -304,8 +308,11 @@ export function openTower(tw) {
       <div class="forkrow">` + branchKeysFor(tw.type).map(br => {
       const b = TOWERS[tw.type].branches[br];
       const st = b.lv[0];
-      const poor = G.me.gold < st.cost;
+      const need = requiredResearch(BASE_LEVELS);
+      const have = (G.me.research[br] || 0) >= need;
+      const poor = G.me.gold < st.cost || !have;
       return `<div class="forkcard ${poor ? 'poor' : ''}" data-br="${br}">
+        ${have ? '' : `<div class="lock">🔒 ${b.name} nivå ${need}</div>`}
         ${towerGlyph(tw.type, 30, BASE_LEVELS, br)}
         <div class="fn" style="color:${b.color}">${b.name}</div>
         ${dmgChip(b.dmg)}
@@ -316,8 +323,10 @@ export function openTower(tw) {
     }).join('') + `</div>`;
   } else {
     action = `<div style="display:flex;gap:8px">
-      <button class="btn upgrade ${(!nxt || G.me.gold < nxt.cost) ? 'disabled' : ''}" id="upBtn" style="flex:2">
-        ${nxt ? `UPPGRADERA ◆${nxt.cost}` : 'MAXNIVÅ'}
+      <button class="btn upgrade ${(!nxt || G.me.gold < nxt.cost || !hasResearch) ? 'disabled' : ''}" id="upBtn" style="flex:2">
+        ${!nxt ? 'MAXNIVÅ' : !hasResearch
+          ? `KRÄVER ${TOWERS.wall.branches[tw.branch].name} NIVÅ ${needLv}`
+          : `UPPGRADERA ◆${nxt.cost}`}
       </button>
       <button class="btn sell" id="sellBtn" style="flex:1">SÄLJ ◆${sell}</button>
     </div>`;
@@ -382,6 +391,39 @@ export function openArmory(focusKey) {
     row.appendChild(el);
   }
   openSheet($('armorySheet'));
+}
+
+/* Forskningen. Det är här man bestämmer vilken riktning hela försvaret
+   ska ta — tornen kan inte gå förbi nivån man forskat fram. */
+export function openResearch() {
+  const rows = BRANCH_KEYS.map(el => {
+    const b = TOWERS.wall.branches[el];
+    const lv = G.me.research[el] || 0;
+    const maxed = lv >= RESEARCH.maxLevel;
+    const cost = researchCost(lv);
+    const poor = G.me.gold < cost;
+    const pips = Array.from({ length: RESEARCH.maxLevel },
+      (_, i) => `<span class="${i < lv ? 'on' : ''}"></span>`).join('');
+    return `<div class="rescard ${maxed ? 'max' : poor ? 'poor' : ''}" data-el="${el}">
+      ${towerGlyph('wall', 30, 3, el)}
+      <div class="rn" style="color:${b.color}">${b.name}</div>
+      ${dmgChip(b.dmg)}
+      <div class="rd">${b.tag}</div>
+      <div class="pips">${pips}</div>
+      <div class="rp">${maxed ? 'MAX' : '◆' + cost}</div>
+    </div>`;
+  }).join('');
+
+  $('researchSheet').innerHTML = `<div class="grip"></div>
+    <h3>Forskning — lås upp högre torntier</h3>
+    <div class="armnote">Torn kan inte gå förbi den elementnivå du forskat fram.
+      <b>Nivå 1</b> öppnar torn 3–4, <b>nivå 2</b> öppnar torn 5, <b>nivå 3</b> öppnar torn 6.
+      Ett element till max kostar ◆5 500 — alla fem kostar ◆27 500, så du får välja.</div>
+    <div class="resrow">${rows}</div>`;
+  openSheet($('researchSheet'));
+  for (const card of $('researchSheet').querySelectorAll('.rescard:not(.max)')) {
+    card.addEventListener('pointerdown', e => { e.stopPropagation(); H.research(card.dataset.el); });
+  }
 }
 
 /* Hela kontramatrisen — utan den är systemet osynligt för spelaren. */

@@ -227,6 +227,26 @@ export const TOWERS = {
 export const TOWER_KEYS = Object.keys(TOWERS);
 export const BASE_LEVELS = 2;   // TRÄ och STEN innan elementvalet
 export const MAX_TOWER_LV = 6;
+/* ============================================================
+   ELEMENTFORSKNING
+   Grundloopen från Element TD: bygg bastorn → forska fram element →
+   kombinera torn och elementnivå för att låsa upp högre tiers.
+
+   Du kan inte forska allt. Att ta ett enda element till nivå 3 kostar
+   4 800 guld; att ta alla fem kostar 24 000. Det är det som tvingar
+   fram en specialisering i stället för att man bygger lite av varje.
+   ============================================================ */
+export const RESEARCH = {
+  maxLevel: 3,
+  cost: [350, 1400, 3600],          // kostnad för nivå 1, 2, 3
+  /* Vilken forskningsnivå tornet kräver för att nå respektive nivå.
+     Index = tornets nivå (0-baserad). Trä och sten kräver ingenting. */
+  requires: [0, 0, 1, 1, 2, 3],
+};
+
+export const researchCost = lv => RESEARCH.cost[lv] ?? Infinity;
+export const requiredResearch = towerLv => RESEARCH.requires[towerLv] ?? 0;
+
 export const BRANCH_KEYS = Object.keys(TOWERS.wall.branches);
 export const branchKeysFor = type => Object.keys(TOWERS[type].branches);
 
@@ -308,6 +328,29 @@ export const CREEPS = {
     nm: 'BOSS', shape: 'boss', color: '#ff3b5c', cls: 'pans',
     hp: 1700, spd: 0.8, r: 0.42, cost: 880, inc: 105, bounty: 180, leak: 3, unlock: 1680,
     note: 'PANSAR · tar 3 liv — ren press, sämst inkomst',
+  },
+
+  /* Sena creeps. Utan dem tar trappan slut efter BOSS och man fastnar i
+     att skicka samma sak i tio minuter — det var den verkliga bristen. */
+  shade: {
+    nm: 'SKUGGA', shape: 'dart', color: '#7fe8d0', cls: 'latt',
+    hp: 620, spd: 3.4, r: 0.22, cost: 1150, inc: 130, bounty: 210, leak: 2, unlock: 2400,
+    note: 'Extremt snabb — hinner förbi långsamma torn',
+  },
+  warden: {
+    nm: 'VÄKTARE', shape: 'blob', color: '#5bb8e0', cls: 'tung',
+    hp: 2600, spd: 1.15, r: 0.32, cost: 1600, inc: 175, bounty: 300, leak: 3, regen: 40, unlock: 3200,
+    note: 'TUNG med kraftig läkning — kräver rå burst',
+  },
+  brood: {
+    nm: 'RUVARE', shape: 'wing', color: '#b57bff', cls: 'flyg', fly: true,
+    hp: 1450, spd: 1.6, r: 0.3, cost: 2100, inc: 220, bounty: 380, leak: 2, count: 2, unlock: 4400,
+    note: '2 st · tung FLYG som struntar i labyrinten',
+  },
+  titan: {
+    nm: 'TITAN', shape: 'boss', color: '#ff8a3d', cls: 'pans',
+    hp: 9000, spd: 0.7, r: 0.48, cost: 3400, inc: 330, bounty: 620, leak: 5, unlock: 6000,
+    note: 'PANSAR · tar 5 liv — sista ordet i en lång match',
   },
 };
 

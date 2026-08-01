@@ -1,6 +1,7 @@
 import {
   TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BRANCH_KEYS, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, sendUpCost, creepIncome, towerStat, needsBranch,
+  RESEARCH, researchCost, requiredResearch,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
 import { canBuild, rebuildSolid, routeCells, nextPlanSpot } from './board.js';
@@ -18,6 +19,8 @@ export function initAI(side, cfg, board) {
   side.think = 1.5;
   side.pref = pickBuildOrder(cfg);
   side.seen = { latt: 0, tung: 0, pans: 0, flyg: 0 };
+  side.research = Object.fromEntries(BRANCH_KEYS.map(k => [k, 0]));
+  side.mainEl = null;
 }
 
 function pickBuildOrder(cfg) {
@@ -91,7 +94,11 @@ function spendOnDefense(A, wave, prof) {
   /* 1) Bygg labyrint. Så länge vägen är kortare än måttet är det alltid
      bättre att förlänga den än att köpa mer eldkraft — creepsen hinner
      helt enkelt inte bli beskjutna nog. */
-  if (b.pathLen < cfg.mazeTarget && A.gold >= wallCost) {
+  /* Muren har ett tak. Utan det bygger AI:n palisader i all evighet och
+     kommer aldrig till forskningen — den stod med tjugo trästockar och
+     ingen eldkraft alls. */
+  const walls = b.towers.filter(t => !t.branch).length;
+  if (b.pathLen < cfg.mazeTarget && walls < 34 && A.gold >= wallCost) {
     const spot = nextPlanSpot(b);
     if (spot && canBuild(b, spot[0], spot[1]).ok) {
       A.gold -= wallCost;
@@ -104,12 +111,30 @@ function spendOnDefense(A, wave, prof) {
     }
   }
 
-  /* 2) Uppgradera det som ger mest mot den faktiska hotbilden. */
+  /* 2) Forska. AI:n väljer ETT huvudelement efter hotbilden och håller sig
+     till det — samma tvång som spelaren har, den har inte råd med alla. */
+  if (!A.mainEl) {
+    A.mainEl = BRANCH_KEYS
+      .map(br => ({ br, v: valueAgainst('wall', 3, br, prof) }))
+      .sort((x, z) => z.v - x.v)[Math.random() < cfg.iq ? 0 : Math.floor(Math.random() * BRANCH_KEYS.length)].br;
+  }
+  const maxTowerLv = b.towers.reduce((m, t) => (t.branch === A.mainEl ? Math.max(m, t.lv) : m), -1);
+  const resLv = A.research[A.mainEl] || 0;
+  const nextLv = Math.min(MAX_TOWER_LV - 1, Math.max(BASE_LEVELS, maxTowerLv + 1));
+  const wantRes = requiredResearch(nextLv);
+  if (resLv < wantRes && resLv < RESEARCH.maxLevel && A.gold >= researchCost(resLv)) {
+    A.gold -= researchCost(resLv);
+    A.research[A.mainEl] = resLv + 1;
+    return;
+  }
+
+  /* 3) Uppgradera det som ger mest mot den faktiska hotbilden. */
   const cands = [];
   for (const t of b.towers) {
     if (t.lv + 1 >= MAX_TOWER_LV) continue;
-    const branches = needsBranch(t) ? BRANCH_KEYS : [t.branch];
+    const branches = needsBranch(t) ? [A.mainEl] : [t.branch];
     for (const br of branches) {
+      if ((A.research[br] || 0) < requiredResearch(t.lv + 1)) continue;
       const st = towerStat(t.type, t.lv + 1, br);
       if (A.gold < st.cost) continue;
       const gain = valueAgainst(t.type, t.lv + 1, br, prof) - valueAgainst(t.type, t.lv, t.branch, prof);

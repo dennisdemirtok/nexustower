@@ -1,6 +1,7 @@
 import {
   MAPS, TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, sendUpCost, creepIncome, waveHpMul, towerStat, towerFace, needsBranch,
+  BRANCH_KEYS, RESEARCH, researchCost, requiredResearch,
 } from './config.js';
 import { makeBoard, towerAt, canBuild, rebuildSolid } from './board.js';
 import { spawn, stepBoard, stepRemote, addFx, addFloat, addParts } from './sim.js';
@@ -24,6 +25,7 @@ function makeSide(name) {
     gold: ECON.startGold,
     income: ECON.startIncome,
     sendLv: Object.fromEntries(CREEP_KEYS.map(k => [k, 0])),
+    research: Object.fromEntries(BRANCH_KEYS.map(k => [k, 0])),
     queue: [],
     pendingSend: [],
     sent: 0, kills: 0,
@@ -251,11 +253,38 @@ function build(key) {
   UI.updateHUD();
 }
 
+/* Forskning: köp en elementnivå. Den gäller alla dina torn av det
+   elementet, så det är en investering i EN riktning — inte i ett torn. */
+function research(el) {
+  if (!G || G.over) return;
+  const lv = G.me.research[el] || 0;
+  if (lv >= RESEARCH.maxLevel) return;
+  const cost = researchCost(lv);
+  if (G.me.gold < cost) { UI.toast('För lite guld'); Audio.sfx.denied(); return; }
+  G.me.gold -= cost;
+  G.me.research[el] = lv + 1;
+  Audio.sfx.branch();
+  Audio.buzz([12, 24, 12]);
+  UI.banner(TOWERS.wall.branches[el].name + ' NIVÅ ' + (lv + 1), 'Nya torntier upplåsta');
+  UI.openResearch();
+  UI.updateHUD();
+}
+
 /* branch krävs bara vid gaffeln (nivå 3 → 4). Valet är permanent. */
 function upgradeTower(tw, branch) {
   if (!G || tw.lv + 1 >= MAX_TOWER_LV) return;
   if (needsBranch(tw) && !branch) return;
   const useBranch = tw.lv + 1 >= BASE_LEVELS ? (branch || tw.branch || 'a') : null;
+  // Elementforskningen är porten: rätt nivå krävs innan tornet får gå vidare.
+  if (useBranch) {
+    const need = requiredResearch(tw.lv + 1);
+    if ((G.me.research[useBranch] || 0) < need) {
+      const nm = TOWERS.wall.branches[useBranch].name;
+      UI.toast(`Kräver ${nm} nivå ${need} — forska först`);
+      Audio.sfx.denied();
+      return;
+    }
+  }
   const nxt = towerStat(tw.type, tw.lv + 1, useBranch);
   if (!nxt || G.me.gold < nxt.cost) { UI.toast('För lite guld'); Audio.sfx.denied(); return; }
   G.me.gold -= nxt.cost;
@@ -556,7 +585,7 @@ function loop(now) {
    Boot
    ============================================================ */
 UI.initUI({
-  send, upgradeSend, build, upgradeTower, sellTower,
+  send, upgradeSend, build, upgradeTower, sellTower, research,
   setView, togglePause, cycleSpeed,
   startCampaign: i => newMatch({ mode: 'campaign', mapIndex: i }),
   findMatch, cancelMatch, leave,

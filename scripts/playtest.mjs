@@ -10,6 +10,7 @@
 import {
   MAPS, ECON, CREEPS, CREEP_KEYS, TOWER_KEYS, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, creepIncome, sendUpCost, towerStat, needsBranch, waveHpMul, BRANCH_KEYS,
+  RESEARCH, researchCost, requiredResearch,
 } from '../public/js/config.js';
 import { makeBoard, canBuild, rebuildSolid, routeCells, nextPlanSpot } from '../public/js/board.js';
 import { spawn, stepBoard, towerDps, towerDpsVs } from '../public/js/sim.js';
@@ -31,6 +32,7 @@ function makeSide(name) {
     name, gold: ECON.startGold, income: ECON.startIncome,
     sendLv: Object.fromEntries(CREEP_KEYS.map(k => [k, 0])),
     pendingSend: [], sent: 0, leaked: 0, board: makeBoard(M),
+    research: Object.fromEntries(BRANCH_KEYS.map(k => [k, 0])), mainEl: null,
   };
 }
 
@@ -66,7 +68,8 @@ function playerTurn(dt, wave) {
 
   // 1) Bygg labyrint tills vägen är lagom lång — det är öppningen i LTW.
   const wallCost = buildCost('wall', b.towers.length);
-  if (b.pathLen < S.mazeTarget && P.gold >= wallCost) {
+  const walls = b.towers.filter(t => !t.branch).length;
+  if (b.pathLen < S.mazeTarget && walls < 34 && P.gold >= wallCost) {
     const spot = nextPlanSpot(b);
     if (spot) {
       P.gold -= wallCost;
@@ -77,12 +80,27 @@ function playerTurn(dt, wave) {
     }
   }
 
-  // 2) Uppgradera det torn som ger mest mot det som faktiskt kommer.
+  // 2) Forska fram ett huvudelement — tornen kan inte gå förbi det.
+  if (!P.mainEl) {
+    P.mainEl = BRANCH_KEYS.map(br => ({ br, v: valueOf('wall', 3, br, prof) }))
+      .sort((x, z) => z.v - x.v)[0].br;
+  }
+  const topLv = b.towers.reduce((m, t) => (t.branch === P.mainEl ? Math.max(m, t.lv) : m), -1);
+  const rl = P.research[P.mainEl] || 0;
+  const want = requiredResearch(Math.min(MAX_TOWER_LV - 1, Math.max(BASE_LEVELS, topLv + 1)));
+  if (rl < want && rl < RESEARCH.maxLevel && P.gold >= researchCost(rl) + S.reserve * 0.3) {
+    P.gold -= researchCost(rl);
+    P.research[P.mainEl] = rl + 1;
+    return;
+  }
+
+  // 3) Uppgradera det torn som ger mest mot det som faktiskt kommer.
   const cands = [];
   for (const t of b.towers) {
     if (t.lv + 1 >= MAX_TOWER_LV) continue;
-    const brs = needsBranch(t) ? BRANCH_KEYS : [t.branch];
+    const brs = needsBranch(t) ? [P.mainEl] : [t.branch];
     for (const br of brs) {
+      if ((P.research[br] || 0) < requiredResearch(t.lv + 1)) continue;
       const st = towerStat(t.type, t.lv + 1, br);
       if (P.gold < st.cost) continue;
       const gain = valueOf(t.type, t.lv + 1, br, prof) - valueOf(t.type, t.lv, t.branch, prof);
