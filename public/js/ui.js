@@ -61,7 +61,7 @@ export function updateHUD() {
   $('inc').textContent = Math.round(G.me.income);
   const t = Math.floor(G.time);
   $('wave').textContent = G.prep > 0
-    ? `BYGG! ${Math.ceil(G.prep)} s till första vågen`
+    ? `BYGG · ${Math.ceil(G.prep)}s`
     : `VÅG ${G.wave + 1} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   $('incBar').style.width = (100 * (1 - G.incT / ECON.incInterval)) + '%';
   refreshSendbarState();

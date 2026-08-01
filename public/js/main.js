@@ -126,7 +126,7 @@ function update(dt) {
     onKill: (c, p) => {
       G.me.gold += c.bounty;
       G.me.kills++;
-      addFloat(G.me.board, p.x, p.y, '+' + c.bounty, '#ffd166');
+      addFloat(G.me.board, p.x, p.y, '+' + Math.round(c.bounty), '#ffd166');
       Audio.sfx.death();
     },
     onLeak: n => hurtMe(n),
