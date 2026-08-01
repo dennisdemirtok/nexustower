@@ -1,5 +1,6 @@
 import { COLS, ROWS, CREEPS, ARMOR, towerFace, towerStat } from './config.js';
 import { cPos, routeCells } from './board.js';
+import { terrainFor, dropShadow, shade } from './art.js';
 
 /* ============================================================
    Rendering.
@@ -210,19 +211,17 @@ function drawBoard(G, b, s, hostile, ctx) {
 function drawGrid(b, s, G) {
   const { cell, ox, oy } = s;
 
-  /* Underlag för hela slagfältet. Utan det ser tornen ut som om de svävar
-     i rymden — det är marken som gör att det läser som en bana. */
+  /* Marken. Byggs en gång per bana och storlek och blittas sedan — den
+     består av hundratals fläckar, stenar och mossklasar som det vore
+     vansinne att rita om varje bildruta. */
   const W = COLS * cell, H = ROWS * cell;
-  const ground = CX.createLinearGradient(ox, oy, ox, oy + H);
-  ground.addColorStop(0, 'rgba(30,40,72,.55)');
-  ground.addColorStop(1, 'rgba(18,24,48,.55)');
-  CX.fillStyle = ground;
-  CX.fillRect(ox, oy, W, H);
-  CX.strokeStyle = 'rgba(120,140,220,.18)';
-  CX.lineWidth = 1.5;
+  const hostile = !G;
+  CX.drawImage(terrainFor(b, cell, b.entry[0] * 31 + b.exit[1] * 7 + b.rock.size, hostile), ox, oy, W, H);
+  CX.strokeStyle = hostile ? 'rgba(255,120,150,.35)' : 'rgba(255,210,150,.35)';
+  CX.lineWidth = 2;
   CX.strokeRect(ox, oy, W, H);
 
-  CX.strokeStyle = 'rgba(70,84,140,.10)';
+  CX.strokeStyle = 'rgba(255,255,255,.05)';
   CX.lineWidth = 1;
   CX.beginPath();
   for (let x = 0; x <= COLS; x++) { CX.moveTo(ox + x * cell, oy); CX.lineTo(ox + x * cell, oy + ROWS * cell); }
@@ -232,13 +231,29 @@ function drawGrid(b, s, G) {
   // Klippor: fasta hinder man varken kan bygga på eller gå igenom.
   for (const key of b.rock) {
     const [x, y] = key.split(',').map(Number);
-    CX.fillStyle = 'rgba(60,70,110,.85)';
-    roundRect(ox + x * cell + cell * 0.08, oy + y * cell + cell * 0.08,
-              cell * 0.84, cell * 0.84, cell * 0.2);
+    const px = gx(s, x), py = gy(s, y), r = cell * 0.42;
+    dropShadow(CX, CX, px, py + r * 0.5, r * 1.0, r * 0.42);
+    const grd = CX.createLinearGradient(px, py - r, px, py + r);
+    grd.addColorStop(0, '#9aa3b8');
+    grd.addColorStop(0.55, '#6a7186');
+    grd.addColorStop(1, '#3d4254');
+    CX.fillStyle = grd;
+    CX.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 3 * i + 0.4;
+      const rr = r * (0.82 + ((x * 7 + y * 13 + i * 5) % 5) * 0.05);
+      const qx = px + Math.cos(a) * rr, qy = py + Math.sin(a) * rr * 0.85;
+      i ? CX.lineTo(qx, qy) : CX.moveTo(qx, qy);
+    }
+    CX.closePath();
     CX.fill();
-    CX.strokeStyle = 'rgba(140,160,220,.35)';
-    CX.lineWidth = 1;
+    CX.strokeStyle = 'rgba(20,16,26,.6)';
+    CX.lineWidth = 1.4;
     CX.stroke();
+    CX.fillStyle = 'rgba(255,255,255,.22)';
+    CX.beginPath();
+    CX.ellipse(px - r * 0.2, py - r * 0.35, r * 0.4, r * 0.2, -0.4, 0, 7);
+    CX.fill();
   }
 
   // Lediga rutor. Under bygge lyser de upp så man ser var labyrinten kan växa.
@@ -352,99 +367,120 @@ function ring(x, y, r, fill, stroke) {
   CX.setLineDash([6, 6]); CX.stroke(); CX.setLineDash([]);
 }
 
+/* Tornen ritas som föremål med volym: markskugga, en stenkropp med
+   ljus ovansida och mörk fot, och elementet som en lysande kristall på
+   toppen. Tidigare var de tunna konturer utan tyngd — det var därför
+   allt såg platt ut oavsett hur många partiklar som flög omkring. */
 function drawTower(tw, s, hostile, time) {
   const face = towerFace(tw.type, tw.lv, tw.branch);
   const { cell } = s;
-  const x = gx(s, tw.cx), y = gy(s, tw.cy), size = cell * 0.78;
+  const x = gx(s, tw.cx), y = gy(s, tw.cy);
+  const size = cell * 0.86;
   const maxed = tw.lv >= 5;
+  const tier = Math.min(2, Math.floor(tw.lv / 2));      // 0 trä, 1 sten, 2 element
 
-  // Skuggplatta under sockeln ger tornet tyngd mot bakgrunden.
-  CX.fillStyle = 'rgba(0,0,0,.35)';
-  roundRect(x - size / 2 + 1.5, y - size / 2 + 2.5, size, size, size * 0.26);
-  CX.fill();
+  dropShadow(CX, CX, x, y + size * 0.34, size * 0.44, size * 0.19);
 
-  // sockel med fasad kant
-  const g = CX.createLinearGradient(x, y - size / 2, x, y + size / 2);
-  if (hostile) { g.addColorStop(0, '#33203d'); g.addColorStop(1, '#170d1c'); }
-  else { g.addColorStop(0, '#2a3563'); g.addColorStop(1, '#121830'); }
+  // --- sockel ---
+  const stone = [
+    ['#8a7a5e', '#5b4c36', '#332a1e'],   // trä
+    ['#a9b0c4', '#6f7789', '#3b4050'],   // sten
+    ['#c3c9dc', '#848ca4', '#464c60'],   // förädlad
+  ][tier];
+  const bh = size * 0.62, bw = size * 0.78;
+  const g = CX.createLinearGradient(x, y - bh * 0.55, x, y + bh * 0.5);
+  g.addColorStop(0, stone[0]);
+  g.addColorStop(0.5, stone[1]);
+  g.addColorStop(1, stone[2]);
   CX.fillStyle = g;
-  CX.strokeStyle = face.color;
-  CX.globalAlpha = 0.42;
-  CX.lineWidth = 1.4;
-  roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
+  roundRect(x - bw / 2, y - bh * 0.5, bw, bh, size * 0.16);
   CX.fill();
+  CX.strokeStyle = 'rgba(15,12,20,.55)';
+  CX.lineWidth = 1.5;
   CX.stroke();
-  CX.globalAlpha = 1;
 
-  /* Nivån visas som en rim som hugger sockeln, inte som en cirkel runt den —
-     annars såg tornen ut som bubblor i stället för fästen. */
-  if (tw.lv > 0) {
-    CX.beginPath();
-    CX.arc(x, y, size * 0.455, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * tw.lv) / 5);
-    CX.strokeStyle = face.color;
-    CX.globalAlpha = maxed ? 1 : 0.65;
-    CX.lineWidth = maxed ? 2.4 : 1.8;
-    CX.lineCap = 'round';
-    CX.stroke();
-    CX.globalAlpha = 1;
-  }
-  // Maxad nivå får en extra glödrand så man ser vilka som är färdiga.
-  if (maxed) {
-    CX.globalCompositeOperation = 'lighter';
-    CX.globalAlpha = 0.16 + 0.06 * Math.sin(time * 2.5 + tw.cx);
-    CX.fillStyle = face.color;
-    roundRect(x - size / 2, y - size / 2, size, size, size * 0.26);
-    CX.fill();
-    CX.globalAlpha = 1;
-    CX.globalCompositeOperation = 'source-over';
-  }
-  // grenmarkering: liten prick i hörnet när tornet valt specialisering
-  if (tw.branch) {
-    CX.beginPath();
-    CX.arc(x + size * 0.34, y - size * 0.34, Math.max(1.5, cell * 0.04), 0, 7);
-    CX.fillStyle = face.color;
-    CX.fill();
+  // ljuskant uppe till vänster
+  CX.strokeStyle = 'rgba(255,255,255,.30)';
+  CX.lineWidth = 1.6;
+  CX.beginPath();
+  CX.moveTo(x - bw / 2 + size * 0.16, y - bh * 0.5 + 1);
+  CX.lineTo(x + bw / 2 - size * 0.16, y - bh * 0.5 + 1);
+  CX.stroke();
+
+  // ovansida som ger djup
+  CX.fillStyle = shade(stone[0], 22);
+  roundRect(x - bw * 0.42, y - bh * 0.5 - size * 0.06, bw * 0.84, size * 0.2, size * 0.08);
+  CX.fill();
+  CX.strokeStyle = 'rgba(15,12,20,.4)';
+  CX.lineWidth = 1;
+  CX.stroke();
+
+  // nivåstreck på sockeln
+  for (let i = 0; i < Math.min(tw.lv, 5); i++) {
+    CX.fillStyle = i < 2 ? 'rgba(255,255,255,.35)' : face.color;
+    CX.fillRect(x - bw / 2 + 3 + i * (cell * 0.075), y + bh * 0.34, cell * 0.05, cell * 0.05);
   }
 
+  // --- elementkristall / pjäs på toppen ---
   CX.save();
-  CX.translate(x, y);
+  CX.translate(x, y - size * 0.12);
   CX.rotate(tw.angle + Math.PI / 2);
-  CX.translate(0, (tw.recoil || 0) * size * 0.13);   // rekyl bakåt i pipans riktning
-  const hg = size * 0.31;
-  CX.strokeStyle = face.color;
-  CX.lineWidth = Math.max(1.6, cell * 0.055);
-  CX.lineJoin = 'round';
-  CX.lineCap = 'round';
-  if (tw.flash > 0) { CX.shadowColor = face.color; CX.shadowBlur = 16 * tw.flash; }
+  CX.translate(0, (tw.recoil || 0) * size * 0.1);
+  const hg = size * 0.26;
+
+  // glödgloria bakom pjäsen
+  const halo = CX.createRadialGradient(0, 0, 0, 0, 0, hg * 2.1);
+  halo.addColorStop(0, face.color + (maxed ? '80' : '55'));
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  CX.fillStyle = halo;
+  CX.beginPath(); CX.arc(0, 0, hg * 2.1, 0, 7); CX.fill();
+
+  // fylld kropp med kontur — inte bara ett streck
   CX.beginPath();
   shapePath(face.shape, hg);
-  CX.stroke();
-  CX.shadowBlur = 0;
-  CX.beginPath();
-  CX.arc(0, 0, Math.max(1.8, cell * 0.055), 0, 7);
-  CX.fillStyle = face.color;
+  const cg = CX.createLinearGradient(0, -hg, 0, hg);
+  cg.addColorStop(0, shade(face.color, 60));
+  cg.addColorStop(1, shade(face.color, -50));
+  CX.fillStyle = cg;
   CX.fill();
-  // Mynningsflamma: en liten kon, inte bara ett streck.
+  CX.strokeStyle = 'rgba(12,10,20,.75)';
+  CX.lineWidth = Math.max(1.4, cell * 0.04);
+  CX.lineJoin = 'round';
+  CX.lineCap = 'round';
+  CX.stroke();
+
+  // liten spegling
+  CX.globalAlpha = 0.5;
+  CX.fillStyle = '#ffffff';
+  CX.beginPath();
+  CX.ellipse(-hg * 0.28, -hg * 0.38, hg * 0.26, hg * 0.16, -0.5, 0, 7);
+  CX.fill();
+  CX.globalAlpha = 1;
+
   if (tw.flash > 0.35) {
     const f = tw.flash;
     CX.globalCompositeOperation = 'lighter';
     CX.globalAlpha = f;
     CX.fillStyle = face.color;
     CX.beginPath();
-    CX.moveTo(0, -hg - cell * 0.30 * f);
-    CX.lineTo(cell * 0.10 * f, -hg + cell * 0.02);
-    CX.lineTo(-cell * 0.10 * f, -hg + cell * 0.02);
+    CX.moveTo(0, -hg - cell * 0.28 * f);
+    CX.lineTo(cell * 0.09 * f, -hg + cell * 0.02);
+    CX.lineTo(-cell * 0.09 * f, -hg + cell * 0.02);
     CX.closePath();
-    CX.fill();
-    CX.fillStyle = '#ffffff';
-    CX.globalAlpha = f * 0.8;
-    CX.beginPath();
-    CX.arc(0, -hg, cell * 0.06 * f, 0, 7);
     CX.fill();
     CX.globalAlpha = 1;
     CX.globalCompositeOperation = 'source-over';
   }
   CX.restore();
+
+  if (maxed) {
+    CX.globalCompositeOperation = 'lighter';
+    CX.globalAlpha = 0.10 + 0.05 * Math.sin(time * 2.5 + tw.cx);
+    CX.fillStyle = face.color;
+    CX.beginPath(); CX.arc(x, y - size * 0.12, size * 0.5, 0, 7); CX.fill();
+    CX.globalAlpha = 1;
+    CX.globalCompositeOperation = 'source-over';
+  }
 }
 
 function shapePath(shape, hg) {
@@ -512,15 +548,9 @@ function drawCreep(c, s, time) {
   const y = c._sy - alt;
   const wob = c.fly ? 0 : Math.sin(c.wob) * r * 0.12;
 
-  if (c.fly) {
-    CX.save();
-    CX.globalAlpha = 0.32;
-    CX.fillStyle = '#04060f';
-    CX.beginPath();
-    CX.ellipse(x, c._sy + cell * 0.06, r * 0.85, r * 0.34, 0, 0, 7);
-    CX.fill();
-    CX.restore();
-  }
+  // Alla creeps får markskugga; flygande får en tydligare och lägre.
+  dropShadow(CX, CX, x, c._sy + (c.fly ? cell * 0.08 : r * 0.55),
+             r * (c.fly ? 0.8 : 0.95), r * (c.fly ? 0.32 : 0.4));
 
   CX.save();
   CX.translate(x, y + wob);
@@ -548,9 +578,18 @@ function drawCreep(c, s, time) {
     CX.strokeStyle = 'rgba(220,230,255,.32)'; CX.lineWidth = 2.4; CX.stroke();
   }
 
-  CX.fillStyle = c.flash > 0 ? '#ffffff' : d.color;
+  // Ljus uppifrån vänster ger kroppen rundning i stället för en platt klick.
+  if (c.flash > 0) {
+    CX.fillStyle = '#ffffff';
+  } else {
+    const bg = CX.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r * 1.15);
+    bg.addColorStop(0, shade(d.color, 70));
+    bg.addColorStop(0.55, d.color);
+    bg.addColorStop(1, shade(d.color, -55));
+    CX.fillStyle = bg;
+  }
   CX.shadowColor = d.color;
-  CX.shadowBlur = 10;
+  CX.shadowBlur = 8;
   CX.beginPath();
   switch (d.shape) {
     case 'dart':
@@ -583,12 +622,15 @@ function drawCreep(c, s, time) {
   }
   CX.fill();
   CX.shadowBlur = 0;
-  CX.strokeStyle = 'rgba(6,8,18,.85)';
-  CX.lineWidth = 1.4;
+  CX.strokeStyle = 'rgba(8,6,16,.9)';
+  CX.lineWidth = Math.max(1.5, r * 0.16);
   CX.stroke();
   if (d.shape !== 'wing') {
-    CX.fillStyle = 'rgba(8,10,22,.75)';
-    CX.beginPath(); CX.arc(0, 0, r * 0.36, 0, 7); CX.fill();
+    // mörk kärna + glansdager, som ett öga
+    CX.fillStyle = 'rgba(10,8,20,.8)';
+    CX.beginPath(); CX.arc(0, 0, r * 0.34, 0, 7); CX.fill();
+    CX.fillStyle = 'rgba(255,255,255,.6)';
+    CX.beginPath(); CX.arc(-r * 0.12, -r * 0.12, r * 0.11, 0, 7); CX.fill();
   }
   CX.restore();
 
