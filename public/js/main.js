@@ -40,8 +40,8 @@ function newMatch({ mode, mapIndex, foeName }) {
     me: makeSide('DU'),
     foe: makeSide(foeName || M.ai.nm),
   };
-  G.me.board = makeBoard(M.wp);
-  G.foe.board = makeBoard(M.wp);
+  G.me.board = makeBoard(M.wp, M.w);
+  G.foe.board = makeBoard(M.wp, M.w);
 
   if (mode === 'campaign') initAI(G.foe, M.ai, G.foe.board);
   else { G.foe.board.remote = true; G.foe.board._map = new Map(); }

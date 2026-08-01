@@ -89,8 +89,27 @@ och varje creep en **pansarklass**, och tabellen avgör hur mycket som går fram
 | ELEKTRISK  | 140% | 85%  | 60%    | 140% |
 | SIKTAD     | 75%  | 135% | 120%   | 130% |
 
-**FLYG** följer inte vägen — drönare går rakt från in- till utgång, vilket ofta
-är en tredjedel så lång sträcka. Ett torn i ett hörn hinner aldrig skjuta på dem.
+**FLYG** följer inte korridoren — drönare går rakt från in- till utgång, vilket
+ofta är en tredjedel så lång sträcka. Ett torn i ett hörn hinner aldrig skjuta.
+
+## Banan är en korridor, inte en stig
+
+Creepsen går i en **bred gata** (3–4 rutor) och sprider ut sig i sidled över
+hela bredden i stället för att gå på ett led. Allt utanför gatan går att bygga
+på — 52–72 byggplatser per bana i stället för ~30 — så fältet fylls med torn
+längs båda sidorna. Det är skillnaden mot en vanlig tower defense: du täcker
+en gata, du följer inte en linje.
+
+| Bana | Längd | Bredd | Byggplatser |
+|------|-------|-------|-------------|
+| SERPENTINEN | 26 | 3 | 52 |
+| TRAPPAN | 23 | 3 | 63 |
+| KROKEN | 23 | 3 | 61 |
+| VINKELN | 19 | 3 | 71 |
+| GATLOPPET | 18 | 4 | 72 |
+
+Lång korridor = mer tid i eldzonen = starkare försvar, därför är banorna
+ordnade efter längd.
 
 Hela tabellen finns i spelet under **TYPER** i kontrollraden.
 

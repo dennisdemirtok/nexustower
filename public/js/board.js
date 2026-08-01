@@ -4,20 +4,36 @@ import { COLS, ROWS, ECON } from './config.js';
    Allt lever i rutkoordinater (0..COLS, 0..ROWS) — rendering
    översätter till pixlar. Det gör simuleringen upplösningsoberoende. */
 
-export function makeBoard(wp) {
+/* wp = mittlinjen genom korridoren, width = hur många rutor bred den är.
+   Skillnaden mot v2: creepsen går i en BRED korridor och sprider ut sig i
+   sidled, och allt utanför korridoren går att bygga på. Det är därför
+   fältet fylls med torn i stället för att ha en tunn stig med några
+   byggplatser bredvid. */
+export function makeBoard(wp, width = 3) {
   const cells = new Set();
   const pts = [];
   let [cx, cy] = wp[0];
   pts.push([cx, cy]);
-  cells.add(cx + ',' + cy);
   for (let i = 1; i < wp.length; i++) {
     const [tx, ty] = wp[i];
     const dx = Math.sign(tx - cx), dy = Math.sign(ty - cy);
-    while (cx !== tx) { cx += dx; pts.push([cx, cy]); cells.add(cx + ',' + cy); }
-    while (cy !== ty) { cy += dy; pts.push([cx, cy]); cells.add(cx + ',' + cy); }
+    while (cx !== tx) { cx += dx; pts.push([cx, cy]); }
+    while (cy !== ty) { cy += dy; pts.push([cx, cy]); }
+  }
+  // Korridorens bredd: alla rutor inom halva bredden från mittlinjen.
+  const r = (width - 1) / 2;
+  for (const [px, py] of pts) {
+    for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) {
+      for (let dx = -Math.ceil(r); dx <= Math.ceil(r); dx++) {
+        if (dx * dx + dy * dy > r * r + 0.1) continue;
+        const x = px + dx, y = py + dy;
+        if (x < 0 || y < 0 || x >= COLS || y >= ROWS) continue;
+        cells.add(x + ',' + y);
+      }
+    }
   }
   const b = {
-    wp, cells, pts, len: pts.length - 1,
+    wp, cells, pts, width, len: pts.length - 1,
     towers: [], creeps: [], shots: [], bolts: [], fx: [], floats: [], parts: [],
     lives: ECON.lives, maxLives: ECON.lives,
     shake: 0, hurt: 0, remote: false,
@@ -30,29 +46,44 @@ export function makeBoard(wp) {
   return b;
 }
 
-/* Position för en creep — följer vägen, eller flyger rakt. */
-export function cPos(b, c) {
-  if (!c.fly) return pPos(b, c.t);
-  const f = Math.max(0, Math.min(1, c.t / b.air.len));
-  return {
-    x: b.air.x0 + (b.air.x1 - b.air.x0) * f,
-    y: b.air.y0 + (b.air.y1 - b.air.y0) * f,
-  };
+/* Riktningen längs mittlinjen vid parametern t (normerad). */
+function pDir(b, t) {
+  const i = Math.max(0, Math.min(b.len - 1, Math.floor(t)));
+  const a = b.pts[i], z = b.pts[i + 1] || a;
+  const dx = z[0] - a[0], dy = z[1] - a[1];
+  const m = Math.hypot(dx, dy) || 1;
+  return { x: dx / m, y: dy / m };
 }
+
+/* Position för en creep. Marktrupper går i korridoren med en egen sidled
+   så de sprider ut sig över hela bredden i stället för att gå på ett led.
+   Flygande går rakt från in- till utgång och struntar i korridoren. */
+export function cPos(b, c) {
+  if (c.fly) {
+    const f = Math.max(0, Math.min(1, c.t / b.air.len));
+    return {
+      x: b.air.x0 + (b.air.x1 - b.air.x0) * f,
+      y: b.air.y0 + (b.air.y1 - b.air.y0) * f,
+    };
+  }
+  const p = pPos(b, c.t);
+  if (!c.off) return p;
+  const d = pDir(b, c.t);
+  return { x: p.x - d.y * c.off, y: p.y + d.x * c.off };
+}
+
+/* Hur långt ut i sidled en creep får ligga utan att hamna i en tornruta. */
+export const laneSpread = (b, r) => Math.max(0, (b.width - 1) / 2 - r - 0.1);
 
 export const routeLen = (b, c) => (c.fly ? b.air.len : b.len);
 
-/* Rutor som är värda att bygga på: inte väg, och inom 2.6 rutor
-   från banan. Resten dimmas ner så man ser var man faktiskt kan agera. */
+/* Allt utanför korridoren går att bygga på. Tidigare krävdes närhet till
+   banan, vilket gjorde fältet glest och placeringen till ett litet beslut. */
 function buildableCells(b) {
   const set = new Set();
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
-      if (b.cells.has(x + ',' + y)) continue;
-      for (const p of b.pts) {
-        const dx = p[0] - x, dy = p[1] - y;
-        if (dx * dx + dy * dy <= 2.6 * 2.6) { set.add(x + ',' + y); break; }
-      }
+      if (!b.cells.has(x + ',' + y)) set.add(x + ',' + y);
     }
   }
   return set;

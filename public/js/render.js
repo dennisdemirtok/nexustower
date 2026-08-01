@@ -226,6 +226,19 @@ function drawBoard(G, b, s, hostile, ctx) {
 
 function drawGrid(b, s, G) {
   const { cell, ox, oy } = s;
+
+  /* Underlag för hela slagfältet. Utan det ser tornen ut som om de svävar
+     i rymden — det är marken som gör att det läser som en bana. */
+  const W = COLS * cell, H = ROWS * cell;
+  const ground = CX.createLinearGradient(ox, oy, ox, oy + H);
+  ground.addColorStop(0, 'rgba(30,40,72,.55)');
+  ground.addColorStop(1, 'rgba(18,24,48,.55)');
+  CX.fillStyle = ground;
+  CX.fillRect(ox, oy, W, H);
+  CX.strokeStyle = 'rgba(120,140,220,.18)';
+  CX.lineWidth = 1.5;
+  CX.strokeRect(ox, oy, W, H);
+
   CX.strokeStyle = 'rgba(70,84,140,.10)';
   CX.lineWidth = 1;
   CX.beginPath();
@@ -248,24 +261,44 @@ function drawGrid(b, s, G) {
   }
 }
 
+/* Korridoren ritas som ett brett fält, inte som en linje. Det är hela
+   skillnaden mot en vanlig tower defense: creepsen har en gata att gå på
+   och tornen står tätt längs båda sidorna. */
 function drawPath(b, s, hostile, time) {
-  const { cell } = s;
+  const { cell, ox, oy } = s;
   const rgb = hostile ? '255,93,115' : '255,180,84';
-  CX.lineJoin = 'round'; CX.lineCap = 'round';
-  const trace = () => {
-    CX.beginPath();
-    CX.moveTo(gx(s, b.wp[0][0]), gy(s, b.wp[0][1]));
-    for (let i = 1; i < b.wp.length; i++) CX.lineTo(gx(s, b.wp[i][0]), gy(s, b.wp[i][1]));
-  };
-  trace(); CX.strokeStyle = `rgba(${rgb},.05)`; CX.lineWidth = cell * 0.95; CX.stroke();
-  trace(); CX.strokeStyle = `rgba(${rgb},.10)`; CX.lineWidth = cell * 0.66; CX.stroke();
-  trace(); CX.strokeStyle = `rgba(10,12,26,.55)`; CX.lineWidth = cell * 0.5; CX.stroke();
-  trace(); CX.strokeStyle = `rgba(${rgb},.45)`; CX.lineWidth = 2; CX.stroke();
 
-  trace();
-  CX.strokeStyle = `rgba(${rgb},.85)`;
+  // 1) själva gatan — mörkare än marken, med en varm ton
+  for (const key of b.cells) {
+    const [x, y] = key.split(',').map(Number);
+    CX.fillStyle = 'rgba(10,13,28,.55)';
+    CX.fillRect(ox + x * cell, oy + y * cell, cell + 0.5, cell + 0.5);
+    CX.fillStyle = `rgba(${rgb},.10)`;
+    CX.fillRect(ox + x * cell, oy + y * cell, cell + 0.5, cell + 0.5);
+  }
+
+  // 2) kantlinje bara där gatan möter byggbar mark
+  CX.strokeStyle = `rgba(${rgb},.5)`;
   CX.lineWidth = 2;
-  CX.setLineDash([cell * 0.2, cell * 0.55]);
+  CX.beginPath();
+  for (const key of b.cells) {
+    const [x, y] = key.split(',').map(Number);
+    const X0 = ox + x * cell, Y0 = oy + y * cell;
+    if (!b.cells.has((x - 1) + ',' + y)) { CX.moveTo(X0, Y0); CX.lineTo(X0, Y0 + cell); }
+    if (!b.cells.has((x + 1) + ',' + y)) { CX.moveTo(X0 + cell, Y0); CX.lineTo(X0 + cell, Y0 + cell); }
+    if (!b.cells.has(x + ',' + (y - 1))) { CX.moveTo(X0, Y0); CX.lineTo(X0 + cell, Y0); }
+    if (!b.cells.has(x + ',' + (y + 1))) { CX.moveTo(X0, Y0 + cell); CX.lineTo(X0 + cell, Y0 + cell); }
+  }
+  CX.stroke();
+
+  // 3) mittlinje som visar färdriktningen
+  CX.lineJoin = 'round'; CX.lineCap = 'round';
+  CX.beginPath();
+  CX.moveTo(gx(s, b.wp[0][0]), gy(s, b.wp[0][1]));
+  for (let i = 1; i < b.wp.length; i++) CX.lineTo(gx(s, b.wp[i][0]), gy(s, b.wp[i][1]));
+  CX.strokeStyle = `rgba(${rgb},.3)`;
+  CX.lineWidth = 2;
+  CX.setLineDash([cell * 0.18, cell * 0.5]);
   CX.lineDashOffset = -time * cell * 1.6;
   CX.stroke();
   CX.setLineDash([]);
@@ -502,7 +535,9 @@ function drawCreep(c, s, time) {
   const d = CREEPS[c.type];
   const { cell } = s;
   const x = c._sx;
-  const r = c.r * cell;
+  // Ritstorleken är större än träffradien — creepsen ska synas tydligt i
+  // korridoren utan att sidledsspridningen eller splashträffarna ändras.
+  const r = c.r * cell * 1.3;
   // Flygande creeps ritas med höjd: skugga på marken, kropp ovanför.
   const alt = c.fly ? cell * 0.34 + Math.sin(c.bob) * cell * 0.05 : 0;
   const y = c._sy - alt;

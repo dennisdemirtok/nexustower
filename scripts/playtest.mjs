@@ -30,7 +30,7 @@ function makeSide(name) {
   return {
     name, gold: ECON.startGold, income: ECON.startIncome,
     sendLv: Object.fromEntries(CREEP_KEYS.map(k => [k, 0])),
-    pendingSend: [], sent: 0, leaked: 0, board: makeBoard(M.wp),
+    pendingSend: [], sent: 0, leaked: 0, board: makeBoard(M.wp, M.w),
   };
 }
 

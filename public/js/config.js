@@ -80,35 +80,36 @@ export const TYPE_VS = {
 
 export const dmgMul = (type, cls) => (TYPE_VS[type] && TYPE_VS[type][cls]) ?? 1;
 
-/* ---------- banor ---------- */
+/* ---------- banor ----------
+   wp = korridorens MITTLINJE, w = hur många rutor bred den är.
+   Creepsen sprider ut sig över hela bredden; allt utanför går att bygga på.
+   Svårighetsordningen följer korridorens längd — lång korridor betyder mer
+   tid i eldzonen, alltså starkare försvar och lättare bana.               */
 export const MAPS = [
   {
-    name: 'ORMEN', short: 'Lång slingrande bana',
+    name: 'SERPENTINEN', short: 'Lång korridor, gott om tid', w: 3,
     ai: { nm: 'WARDEN-1', iq: 0.45, aggr: 0.35, tick: 1.5, bank: 0.30 },
-    wp: [[0,1],[7,1],[7,4],[1,4],[1,7],[7,7],[7,10],[1,10],[1,13]],
+    wp: [[1,0],[1,4],[7,4],[7,8],[1,8],[1,13]],
   },
-  /* Ordningen är vald efter banlängd: lång bana = starkt försvar = lättare.
-     SPIRALEN har 44 rutor väg, SICKSACK 30, GATLOPPET bara 13. Tillsammans
-     med AI-konfigurationerna ger det en ramp som faktiskt känns. */
   {
-    name: 'SPIRALEN', short: 'Lång spiral mot mitten',
+    name: 'TRAPPAN', short: 'Fyra avsatser', w: 3,
     ai: { nm: 'WARDEN-2', iq: 0.6, aggr: 0.45, tick: 1.3, bank: 0.33 },
-    wp: [[0,0],[8,0],[8,13],[0,13],[0,3],[5,3],[5,10],[2,10],[2,6]],
+    wp: [[1,0],[1,3],[4,3],[4,6],[7,6],[7,9],[4,9],[4,13]],
   },
   {
-    name: 'SICKSACK', short: 'Tätare svängar',
+    name: 'KROKEN', short: 'Två skarpa vändningar', w: 3,
     ai: { nm: 'HELIX', iq: 0.78, aggr: 0.55, tick: 1.1, bank: 0.37 },
-    wp: [[0,2],[6,2],[6,5],[2,5],[2,8],[6,8],[6,11],[0,11]],
+    wp: [[4,0],[4,4],[1,4],[1,9],[7,9],[7,13]],
   },
   {
-    name: 'KORSELDEN', short: 'Kort — svårt att hinna',
+    name: 'VINKELN', short: 'Kort — svårt att hinna', w: 3,
     ai: { nm: 'RAZOR', iq: 0.9, aggr: 0.6, tick: 0.9, bank: 0.42 },
-    wp: [[0,3],[5,3],[5,7],[8,7],[8,11],[2,11],[2,13]],
+    wp: [[2,0],[2,7],[7,7],[7,13]],
   },
   {
-    name: 'GATLOPPET', short: 'Extremt kort bana',
+    name: 'GATLOPPET', short: 'Bred gata, kort sträcka', w: 4,
     ai: { nm: 'OMEGA', iq: 1.0, aggr: 0.55, tick: 0.75, bank: 0.48 },
-    wp: [[0,5],[4,5],[4,10],[8,10]],
+    wp: [[6,0],[6,6],[2,6],[2,13]],
   },
 ];
 

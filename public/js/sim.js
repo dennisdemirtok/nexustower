@@ -1,5 +1,5 @@
 import { CREEPS, sendHpMul, towerStat, towerFace, dmgMul } from './config.js';
-import { cPos, routeLen } from './board.js';
+import { cPos, routeLen, laneSpread } from './board.js';
 
 const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
 
@@ -13,6 +13,8 @@ export function spawn(b, type, wave, lv = 0, hpMulExtra = 1) {
     b.creeps.push({
       id: ++SEQ,
       type, lv, cls: d.cls, fly: !!d.fly,
+      // egen bana i sidled genom korridoren
+      off: d.fly ? 0 : (Math.random() * 2 - 1) * laneSpread(b, d.r),
       t: -i * 0.5 - Math.random() * 0.3,
       hp, maxHp: hp,
       spd: d.spd, slow: 0, slowT: 0, r: d.r,
