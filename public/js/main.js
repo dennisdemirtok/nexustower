@@ -133,12 +133,23 @@ function update(dt) {
 }
 let audioT = 0;
 
+/* Livstöld: den som läcker förlorar liv och den som skickade creepen vinner
+   lika många. Summan är konstant, så matchen är en dragkamp — inte två
+   parallella nedräkningar som råkar ta olika lång tid. */
+const steal = (side, n) => {
+  if (!ECON.lifeSteal) return;
+  side.board.lives = Math.min(ECON.maxLives, side.board.lives + n);
+};
+
 function hurtMe(n) {
   if (G.over) return;
   G.me.board.lives -= n;
   UI.alertTab('def');
   Audio.sfx.leak();
   Audio.buzz([28, 40, 28]);
+  // I kampanjen sköter vi båda sidor; online måste motståndaren få veta.
+  if (G.mode === 'campaign') steal(G.foe, n);
+  else Net.send({ t: 'steal', n });
   if (G.me.board.lives <= 0) {
     G.me.board.lives = 0;
     if (G.mode === 'online') Net.send({ t: 'lose' });
@@ -150,6 +161,8 @@ function hurtFoe(n) {
   if (G.over) return;
   G.foe.board.lives -= n;
   UI.alertTab('atk');
+  steal(G.me, n);
+  addFloat(G.me.board, 4, 7, '+' + n + ' LIV', '#4fd8eb');
   if (G.foe.board.lives <= 0) {
     G.foe.board.lives = 0;
     endMatch(true);
@@ -377,6 +390,13 @@ function onNetMessage(m) {
       break;
     case 'snap':
       applySnapshot(m.s);
+      break;
+    case 'steal':
+      // Motståndaren läckte — vi vinner lika många liv som de förlorade.
+      if (G && G.mode === 'online' && !G.over) {
+        G.me.board.lives = Math.min(ECON.maxLives, G.me.board.lives + (m.n || 0));
+        addFloat(G.me.board, 4, 7, '+' + m.n + ' LIV', '#4fd8eb');
+      }
       break;
     case 'opp_lost':
       if (G && !G.over) { G.foe.board.lives = 0; endMatch(true); }

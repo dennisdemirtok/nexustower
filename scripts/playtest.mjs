@@ -127,6 +127,9 @@ let time = 0, wave = 0, waveT = ECON.waveInterval, incT = ECON.incInterval;
 let sendCd = 0, winner = null;
 const log = [];
 const firstLeak = { P: null, A: null };
+/* Mäter det användaren faktiskt frågade efter: hinner man bli fattig?
+   "Pank" = har inte råd med det billigaste tornet (160 guld). */
+let brokeTime = 0, richTime = 0;
 
 while (time < 60 * 30 && !winner) {
   time += STEP;
@@ -161,12 +164,16 @@ while (time < 60 * 30 && !winner) {
     stepBoard(me.board, STEP, {
       onKill: c => { me.gold += c.bounty; },
       onLeak: n => {
-        me.board.lives -= n; me.leaked += n;
+        me.board.lives -= n;
+        foe.board.lives = Math.min(ECON.maxLives, foe.board.lives + n);
+        me.leaked += n;
         if (firstLeak[tag] === null) firstLeak[tag] = time;
         if (me.board.lives <= 0 && !winner) winner = foe.name;
       },
     });
   }
+
+  if (P.gold < 160) brokeTime += STEP; else richTime += STEP;
 
   if (Math.abs(time % 60) < STEP / 2) {
     log.push({ t: Math.round(time), wave, P: snap(P), A: snap(A) });
@@ -204,3 +211,4 @@ console.log(`Första läckan: du ${firstLeak.P ? Math.round(firstLeak.P) + 's' :
 console.log(winner ? `\nVINNARE: ${winner} efter ${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`
                    : '\nOAVGJORT efter 30 min — matchen fastnar.');
 console.log(`Du skickade ${P.sent}, läckte ${P.leaked}. AI skickade ${A.sent}, läckte ${A.leaked}.`);
+console.log(`Pank (< 160 guld, kan inte ens bygga billigaste tornet): ${Math.round(100 * brokeTime / (brokeTime + richTime))} % av matchen`);

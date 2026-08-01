@@ -55,6 +55,7 @@ while (time < 60 * 30 && !winner) {
       onKill: c => { me.gold += c.bounty; },
       onLeak: n => {
         me.board.lives -= n;
+        foe.board.lives = Math.min(ECON.maxLives, foe.board.lives + n);
         me.leaked += n;
         if (me.board.lives <= 0 && !winner) winner = foe.name;
       },

@@ -16,15 +16,15 @@ export const ECON = {
   /* Guldskalan är medvetet "stor" (hundratal, inte tiotal). Med små tal blev
      inkomsten per creep 1 för både SVÄRM och GRUNT efter avrundning, och då
      försvinner hela valet mellan billig och dyr creep. */
-  startGold: 1040,
-  startIncome: 48,       // guld per inkomsttick
-  incInterval: 5,        // sekunder mellan inkomsttick
-  /* Andel av creepkostnaden som blir permanent inkomst.
-     Detta är spelets känsligaste siffra: inkomsten växer exponentiellt med
-     den. 0.20 (v1) gav återbetalning på 25 s och inkomst i tiotusental.
-     0.05 ger återbetalning på ~100 s — att skicka blir en investering man
-     måste väga mot att bygga, inte gratis pengar. */
-  incomeRate: 0.05,
+  startGold: 800,
+  startIncome: 120,      // guld per inkomsttick
+
+  /* 15 sekunder, som i Line Tower Wars. Med 5 s droppade det in pengar
+     hela tiden och man hann aldrig bli fattig — inget tryck, inget val.
+     Nu kommer en klumpsumma, man gör av med den, och sedan står man där
+     och tittar på nedräkningen medan creepsen kommer. Det är tempot. */
+  incInterval: 15,
+
   sendCooldown: 1.0,     // sekunder mellan sändningar (kön hanterar resten)
   queueMax: 6,
   buildTax: 1.05,        // varje torn du äger gör nästa torn 5% dyrare
@@ -33,7 +33,15 @@ export const ECON = {
   maxSendLv: 5,
   sendUpHp: 0.35,        // +35% HP per nivå på den creeptypen
   sendUpCost: (cost, lv) => Math.round(cost * 4 * Math.pow(1.7, lv)),
-  lives: 20,
+  lives: 25,
+
+  /* Livstöld, som i LTW: den som läcker förlorar liv OCH den som skickade
+     creepen vinner lika många. Summan liv i matchen är konstant, så partiet
+     blir en dragkamp som faktiskt tar slut i stället för två parallella
+     nedräkningar. Det är därför WC3-spelare kan stå på 83 liv mot 13.      */
+  lifeSteal: true,
+  maxLives: 60,
+
   sellRate: 0.75,
 };
 
@@ -310,51 +318,61 @@ export function nextStat(tw, branch) {
 
 /* ============================================================
    CREEPS
-   cls = pansarklass, avgör vilka torn som biter.
-   fly = flyger rakt över banan i stället för att följa vägen.
+   cls  = pansarklass, avgör vilka torn som biter.
+   fly  = flyger rakt över banan i stället för att följa vägen.
+   inc  = permanent inkomstökning när du skickar typen.
    unlock = inkomsten du måste ha nått för att få skicka typen.
+
+   Inkomsten är INTE en fast procent av kostnaden. Som i Line Tower Wars
+   ger billiga creeps mer inkomst per guld än dyra:
+
+     SVÄRM   64 guld → +14   (22 %, återbetalt på ~69 s)
+     BOSS   880 guld → +105  (12 %, återbetalt på ~126 s)
+
+   Därför är billiga creeps ekonomibygget och dyra creeps ren press.
+   Med en enhetlig procent fanns det valet inte alls.
    ============================================================ */
 export const CREEPS = {
   swarm: {
     nm: 'SVÄRM', shape: 'blob', color: '#ff9d54', cls: 'latt',
-    hp: 14, spd: 2.1, r: 0.15, cost: 64, bounty: 8, leak: 1, count: 4, unlock: 0,
-    note: '4 st · billigast att komma igång med',
+    hp: 14, spd: 2.1, r: 0.15, cost: 64, inc: 14, bounty: 8, leak: 1, count: 4, unlock: 0,
+    note: '4 st · bäst inkomst per guld',
   },
   grunt: {
     nm: 'GRUNT', shape: 'blob', color: '#ff5d73', cls: 'tung',
-    hp: 60, spd: 1.5, r: 0.25, cost: 96, bounty: 20, leak: 1, unlock: 0,
+    hp: 60, spd: 1.5, r: 0.25, cost: 96, inc: 19, bounty: 20, leak: 1, unlock: 0,
     note: 'Allround · straffar KINETISK och ELEKTRISK',
   },
   runner: {
     nm: 'LÖPARE', shape: 'dart', color: '#ffd166', cls: 'latt',
-    hp: 34, spd: 3.1, r: 0.20, cost: 120, bounty: 20, leak: 1, unlock: 90,
+    hp: 34, spd: 3.1, r: 0.20, cost: 120, inc: 22, bounty: 20, leak: 1, unlock: 270,
     note: 'Springer förbi långsamma torn',
-  },
-  drone: {
-    nm: 'DRÖNARE', shape: 'wing', color: '#66e0ff', cls: 'flyg', fly: true,
-    hp: 85, spd: 1.75, r: 0.22, cost: 260, bounty: 46, leak: 1, count: 2, unlock: 260,
-    note: '2 st · flyger RAKT över banan och struntar i vägen',
   },
   regen: {
     nm: 'REGEN', shape: 'blob', color: '#3ddc97', cls: 'tung',
-    hp: 140, spd: 1.4, r: 0.27, cost: 220, bounty: 40, leak: 2, regen: 10, unlock: 175,
+    hp: 140, spd: 1.4, r: 0.27, cost: 220, inc: 36, bounty: 40, leak: 2, regen: 10, unlock: 520,
     note: 'Läker 10 HP/s — kräver burstskada',
+  },
+  drone: {
+    nm: 'DRÖNARE', shape: 'wing', color: '#66e0ff', cls: 'flyg', fly: true,
+    hp: 85, spd: 1.75, r: 0.22, cost: 260, inc: 42, bounty: 46, leak: 1, count: 2, unlock: 780,
+    note: '2 st · flyger RAKT över banan och struntar i vägen',
   },
   brute: {
     nm: 'BJÄSSE', shape: 'tank', color: '#c05be0', cls: 'pans',
-    hp: 300, spd: 1.0, r: 0.34, cost: 320, bounty: 56, leak: 2, unlock: 280,
+    hp: 300, spd: 1.0, r: 0.34, cost: 320, inc: 46, bounty: 56, leak: 2, unlock: 840,
     note: 'PANSAR — KINETISK och ELEKTRISK studsar av',
   },
   boss: {
     nm: 'BOSS', shape: 'boss', color: '#ff3b5c', cls: 'pans',
-    hp: 1700, spd: 0.8, r: 0.42, cost: 880, bounty: 180, leak: 3, unlock: 560,
-    note: 'PANSAR · tar 4 liv om den kommer fram',
+    hp: 1700, spd: 0.8, r: 0.42, cost: 880, inc: 105, bounty: 180, leak: 3, unlock: 1680,
+    note: 'PANSAR · tar 3 liv — ren press, sämst inkomst',
   },
 };
 
 export const CREEP_KEYS = Object.keys(CREEPS);
 
-export const creepIncome = key => Math.round(CREEPS[key].cost * ECON.incomeRate);
+export const creepIncome = key => CREEPS[key].inc;
 export const sendUpCost = (key, lv) => ECON.sendUpCost(CREEPS[key].cost, lv);
 export const sendHpMul = lv => Math.pow(1 + ECON.sendUpHp, lv);
 export const waveHpMul = wave => Math.pow(ECON.waveHp, wave);

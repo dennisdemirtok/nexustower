@@ -46,6 +46,35 @@ inga miljövariabler behöver sättas.
 Öppna Railway-URL:en i mobilen och välj **Lägg till på hemskärmen**. Appen är en
 PWA (`manifest.webmanifest`) och startar då i helskärm utan webbläsarens ramar.
 
+## Ekonomin — hämtad från Line Tower Wars
+
+Tre regler är tagna rakt från WC3-förlagan:
+
+**Inkomsten tickar var 15:e sekund.** Med 5 sekunder droppade det in pengar
+hela tiden och man hann aldrig bli fattig. Nu kommer en klumpsumma, man gör av
+med den, och sedan står man och tittar på nedräkningen medan creepsen kommer.
+Ett aggressivt spel ligger pank ungefär halva matchen.
+
+**Billiga creeps ger mer inkomst per guld än dyra.** Inte en fast procent:
+
+| Creep | Kostnad | Inkomst | Andel | Återbetalt |
+|-------|---------|---------|-------|------------|
+| SVÄRM | 64 | +14 | 22 % | ~69 s |
+| GRUNT | 96 | +19 | 20 % | ~76 s |
+| LÖPARE | 120 | +22 | 18 % | ~82 s |
+| REGEN | 220 | +36 | 16 % | ~92 s |
+| DRÖNARE | 260 | +42 | 16 % | ~93 s |
+| BJÄSSE | 320 | +46 | 14 % | ~104 s |
+| BOSS | 880 | +105 | 12 % | ~126 s |
+
+Billiga creeps är alltså ekonomibygget, dyra är ren press. Med en enhetlig
+procent fanns det valet inte alls.
+
+**Livstöld.** Den som läcker förlorar liv *och* den som skickade creepen vinner
+lika många. Summan liv i matchen är konstant, så partiet blir en dragkamp som
+faktiskt tar slut — inte två parallella nedräkningar som råkar ta olika lång
+tid. Det är därför WC3-spelare kan stå på 83 liv mot 13.
+
 ## Skadetyper och pansarklasser
 
 Som i WC3 finns inget torn som är bra mot allt. Varje torn har en **skadetyp**

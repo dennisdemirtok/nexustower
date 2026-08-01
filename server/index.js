@@ -106,6 +106,7 @@ wss.on('connection', (ws) => {
       // Vidarebefordra allt spelrelaterat rakt av till motståndaren.
       case 'send':
       case 'snap':
+      case 'steal':
       case 'emote':
         if (opp) send(opp.ws, m);
         break;
