@@ -452,6 +452,13 @@ UI.initUI({
   },
 });
 
+/* iOS Safari struntar i user-scalable=no. Utan det här zoomar sidan när man
+   trycker snabbt flera gånger i sendbaren, vilket är exakt vad man gör. */
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+}
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+
 // Felsökningskrok: window.NW.G i konsolen ger hela speltillståndet.
 window.NW = { get G() { return G; }, hurtMe, endMatch };
 

@@ -6,7 +6,14 @@
   --text:#e8ecff; --muted:#8a93b8;
   --r:14px;
 }
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{
+  margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+  /* touch-action ärvs INTE — sätts den bara på body zoomar Safari ändå när
+     man dubbeltrycker på en sendknapp. 'manipulation' stänger av
+     dubbeltryck-zoom men behåller vanlig scroll. */
+  touch-action:manipulation;
+  -webkit-touch-callout:none;
+}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{
   background:var(--bg);color:var(--text);

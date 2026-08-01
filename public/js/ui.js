@@ -162,13 +162,17 @@ export function buildSendbar() {
 
 /* Tap = skicka (köas om guldet inte räcker). Håll = öppna armén.
    Rörelse > 10 px räknas som scroll, inte tryck — det var därför
-   sändningarna kändes opålitliga i v1. */
+   sändningarna kändes opålitliga i v1.
+   Hålltiden är 500 ms, inte 380: ett lite trögt tryck mitt i en strid
+   råkade annars räknas som håll, och då uteblev sändningen helt. */
+const LONG_PRESS = 500;
+
 function attachSendCard(el, key) {
   let sx = 0, sy = 0, moved = false, lp = null;
   el.addEventListener('pointerdown', e => {
     sx = e.clientX; sy = e.clientY; moved = false;
     clearTimeout(lp);
-    lp = setTimeout(() => { lp = null; openArmory(key); navigator.vibrate?.(12); }, 380);
+    lp = setTimeout(() => { lp = null; openArmory(key); navigator.vibrate?.(12); }, LONG_PRESS);
   });
   el.addEventListener('pointermove', e => {
     if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) {
