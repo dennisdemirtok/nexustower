@@ -584,7 +584,18 @@ function loop(now) {
     }
   }
   if (G) UI.updateHUD();
-  R.drawFrame(G);
+  /* Ett fel i ritningen får inte döda spelet. Det har hänt två gånger att en
+     saknad funktion kastade mitt i drawFrame, och då slutade hela canvasen
+     uppdateras — allt blev vitt. Nu loggas felet en gång och loopen lever
+     vidare, så man ser åtminstone vad som gick sönder. */
+  try {
+    R.drawFrame(G);
+  } catch (err) {
+    if (!loop._warned) {
+      loop._warned = true;
+      console.error('Ritfel — spelet fortsätter men bilden kan sakna delar:', err);
+    }
+  }
 }
 
 /* ============================================================

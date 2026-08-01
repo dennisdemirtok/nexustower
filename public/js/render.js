@@ -725,6 +725,81 @@ function drawCreepBars(c, s, x, y, r, cell) {
   }
 }
 
+/* Projektiler, kedjeblixtar och träffeffekter. De här tre försvann i samma
+   omskrivning som cacheCreepPositions, och eftersom drawBoard anropar dem
+   kastade varje bildruta ett fel så fort ett skott eller en effekt fanns på
+   banan — bygger man ett torn skapas en ring, och då dog hela ritningen. */
+function drawShot(sh, s) {
+  const x = gx(s, sh.x), y = gy(s, sh.y);
+  if (sh.trail && sh.trail.length) {
+    CX.strokeStyle = sh.color;
+    CX.globalAlpha = 0.35;
+    CX.lineWidth = 2;
+    CX.beginPath();
+    CX.moveTo(gx(s, sh.trail[0].x), gy(s, sh.trail[0].y));
+    for (const t of sh.trail) CX.lineTo(gx(s, t.x), gy(s, t.y));
+    CX.lineTo(x, y);
+    CX.stroke();
+    CX.globalAlpha = 1;
+  }
+  CX.beginPath();
+  CX.arc(x, y, sh.st && sh.st.splash ? s.cell * 0.11 : s.cell * 0.07, 0, 7);
+  CX.fillStyle = sh.color;
+  CX.shadowColor = sh.color;
+  CX.shadowBlur = 10;
+  CX.fill();
+  CX.shadowBlur = 0;
+}
+
+function drawBolt(bo, s) {
+  CX.strokeStyle = bo.color;
+  CX.globalAlpha = Math.max(0, bo.life / 0.2);
+  CX.lineWidth = 2.5;
+  CX.shadowColor = bo.color;
+  CX.shadowBlur = 12;
+  CX.beginPath();
+  bo.pts.forEach((p, i) => {
+    const jx = i ? (Math.random() - 0.5) * 6 : 0;
+    const jy = i ? (Math.random() - 0.5) * 6 : 0;
+    const px = gx(s, p.x) + jx, py = gy(s, p.y) + jy;
+    i ? CX.lineTo(px, py) : CX.moveTo(px, py);
+  });
+  CX.stroke();
+  CX.shadowBlur = 0;
+  CX.globalAlpha = 1;
+}
+
+function drawFx(f, s) {
+  const k = Math.max(0, f.life / f.max);
+  const x = gx(s, f.x), y = gy(s, f.y);
+  if (f.k === 'ring') {
+    CX.beginPath();
+    CX.arc(x, y, (1 - k) * f.r * s.cell, 0, 7);
+    CX.strokeStyle = f.color;
+    CX.globalAlpha = k;
+    CX.lineWidth = 2.5;
+    CX.stroke();
+  } else if (f.k === 'boom') {
+    CX.beginPath();
+    CX.arc(x, y, (1 - k) * f.r * s.cell, 0, 7);
+    CX.fillStyle = f.color;
+    CX.globalAlpha = k * 0.45;
+    CX.fill();
+    CX.globalAlpha = k;
+    CX.strokeStyle = f.color;
+    CX.lineWidth = 1.5;
+    CX.stroke();
+  } else {
+    CX.beginPath();
+    CX.arc(x, y, s.cell * 0.06 + (1 - k) * s.cell * 0.14, 0, 7);
+    CX.strokeStyle = f.color;
+    CX.globalAlpha = k;
+    CX.lineWidth = 1.5;
+    CX.stroke();
+  }
+  CX.globalAlpha = 1;
+}
+
 function drawPart(p, s) {
   const k = Math.max(0, p.life / p.max);
   CX.globalAlpha = k;
