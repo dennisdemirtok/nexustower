@@ -246,7 +246,7 @@ function stepCreeps(b, dt, hooks) {
        varg tar därför fler steg än en trög golem i stället för att båda
        vicka lika fort — det var det som fick dem att se ut att glida i
        stället för att gå. Bromsas creepen av is saktar stegen med. */
-    c.wob += (c.fly ? dt * 5 : c.spd * (1 - c.slow) * dt * 4.2);
+    c.wob += (c.fly ? dt * 5 : c.spd * (1 - c.slow) * dt * 7.5);
     c.bob += dt * 2.4;
 
     /* t < 0 är utsläppsfördröjning så en grupp inte spawnar ovanpå varandra.

@@ -300,7 +300,27 @@ function openSheet(el) {
   const wasOpen = el.classList.contains('open');
   for (const s of sheets()) s.classList.toggle('open', s === el);
   $('sheetScrim').classList.add('on');
+  /* Varje panel får ett kryss. Skymten av bakgrunden var enda vägen ut
+     tidigare, och en lång panel — skadetyperna, armén — täcker hela
+     skärmen på mobil. Då fanns ingenting att trycka på och man satt fast
+     mitt i en match. Knappen läggs till en gång per panel. */
+  if (!el.querySelector('.sheetclose')) {
+    const b = document.createElement('button');
+    b.className = 'sheetclose';
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Stäng');
+    b.textContent = '✕';
+    b.addEventListener('click', e => { e.stopPropagation(); closeSheets(); });
+    // Först i panelen, inte sist — sticky top fungerar bara uppifrån, och
+    // en lång panel sköt annars ut knappen tvåtusen pixlar ner.
+    el.insertBefore(b, el.firstChild);
+  }
   if (!wasOpen) Audio.sfx.ui();
+}
+
+/* Escape stänger också. */
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheets(); });
 }
 
 export function closeSheets() {

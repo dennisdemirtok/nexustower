@@ -874,12 +874,20 @@ function drawCreep(c, s, time) {
      creepen halkar i sidled. Nu lyfts kroppen på varje steg och plattas
      till i nedslaget — samma trick som en gånganimation gör, fast utan
      bildrutor. Absolutbeloppet ger två nedslag per period, alltså två ben. */
-  const steg = c.fly ? 0 : Math.abs(Math.sin(c.wob));
-  const wob = c.fly ? 0 : -steg * r * 0.16;
-  const gangY = c.fly ? 1 : 1 - (1 - steg) * 0.10;
-  const gangX = c.fly ? 1 : 1 + (1 - steg) * 0.07;
-  // Lätt vaggning i sidled ovanpå — men bråkdelen av vad den var.
-  const lut = c.fly ? 0 : Math.sin(c.wob * 0.5) * 0.05;
+  /* Gångcykeln. Absolutbeloppet ger två nedslag per period, alltså två
+     ben: kroppen lyfts mellan stegen och plattas till i nedslaget.
+     Viktöverföringen är det som gör att det läser som steg och inte som
+     studsning — kroppen lutar mot det ben som bär, och lutningen byter
+     håll varje nedslag. Utan den ser även rätt takt ut som hoppande. */
+  const cyk = c.wob;
+  const steg = c.fly ? 0 : Math.abs(Math.sin(cyk));
+  const wob = c.fly ? 0 : -steg * r * 0.20;
+  const gangY = c.fly ? 1 : 1 - (1 - steg) * 0.13;
+  const gangX = c.fly ? 1 : 1 + (1 - steg) * 0.09;
+  // Rullning i sidled, ett halvt varv per steg: höger ben, vänster ben.
+  const lut = c.fly ? 0 : Math.sin(cyk) * 0.085;
+  // Kroppen skjuts en aning åt det håll den lutar, som en tyngdförflyttning.
+  const skift = c.fly ? 0 : Math.sin(cyk) * r * 0.07;
 
   /* Dödsklappen: kroppen plattas ihop mot marken och tonar ut på ett
      kvarts sekund. Fram till nu togs creepen bort på samma bildruta som
@@ -897,7 +905,7 @@ function drawCreep(c, s, time) {
   const cimg = sheet || spriteFor.creep(c.type);
   if (cimg) {
     CX.save();
-    CX.translate(x, y + wob + (c.dead ? r * dieT * 0.5 : 0));
+    CX.translate(x + (c.dead ? 0 : skift), y + wob + (c.dead ? r * dieT * 0.5 : 0));
     if (!c.dead) CX.rotate(lut);
     CX.scale(sqX * gangX, sqY * gangY);
     if (c.flash > 0) { CX.filter = 'brightness(2.4)'; }
@@ -910,7 +918,7 @@ function drawCreep(c, s, time) {
   }
 
   CX.save();
-  CX.translate(x, y + wob + (c.dead ? r * dieT * 0.5 : 0));
+  CX.translate(x + (c.dead ? 0 : skift), y + wob + (c.dead ? r * dieT * 0.5 : 0));
   if (!c.dead) CX.rotate(lut);
   CX.scale(sqX * gangX, sqY * gangY);
 
