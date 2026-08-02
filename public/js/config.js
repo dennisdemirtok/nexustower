@@ -96,9 +96,9 @@ export const ECON = {
      och tolv nivå-1-torn tappade tio liv utan att spelaren gjort fel.     */
   tierHp: { 0: 1.0, 2: 1.3, 4: 2.2, 7: 4.0, 10: 5.0 },
 
-  lives: 25,
+  lives: 60,
   lifeSteal: true,
-  maxLives: 60,
+  maxLives: 140,
   sellRate: 0.85,
 };
 
@@ -157,10 +157,16 @@ export const MAPS = [
     entry: [5, 0], exit: [5, 15], rock: [],
   },
   {
-    name: 'PELARNA', short: 'Fem klippor att bygga runt',
+    /* Floden delar fältet på mitten och lämnar två vad. Labyrinten måste
+       byggas i den halva creepsen befinner sig i — och det som passerar ett
+       vad går alltid genom samma två rutor, vilket är den bästa platsen på
+       hela banan att ställa ett torn. Flygande bryr sig inte, så luftvägen
+       blir för första gången värd att kontra. */
+    name: 'FLODEN', short: 'En flod tvärs över med två vad',
     ai: { nm: 'WARDEN-2', iq: 0.6, aggr: 0.45, tick: 1.3, bank: 0.33, mazeTarget: 40 },
     entry: [5, 0], exit: [5, 15],
-    rock: [[2, 4], [8, 4], [5, 8], [2, 12], [8, 12]],
+    rock: [[1, 3], [9, 12]],
+    water: rocks(row(7, 0, 1), row(7, 3, 6), row(7, 8, 10)),
   },
   {
     name: 'KLYFTAN', short: 'En mur tvärs över med ett enda hål',

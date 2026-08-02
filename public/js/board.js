@@ -18,13 +18,18 @@ export function makeBoard(map) {
   const b = {
     entry: map.entry, exit: map.exit,
     rock: new Set((map.rock || []).map(([x, y]) => x + ',' + y)),
+    /* Vatten spärrar precis som klippa, men hålls i en egen mängd. Skälet
+       är inte utseendet utan att en flod läser som en gräns man ska hitta
+       vadstället i, medan en klippa läser som något att bygga runt. Samma
+       regel, helt olika beslut. */
+    water: new Set((map.water || []).map(([x, y]) => x + ',' + y)),
     towers: [], creeps: [], shots: [], bolts: [], fx: [], floats: [], parts: [],
     lives: ECON.lives, maxLives: ECON.lives,
     shake: 0, hurt: 0, remote: false,
     dist: new Int32Array(COLS * ROWS),
     solid: new Set(),
   };
-  b.solid = new Set(b.rock);
+  b.solid = new Set([...b.rock, ...b.water]);
   computeField(b);
   b.air = {
     x0: map.entry[0], y0: map.entry[1],
@@ -35,7 +40,7 @@ export function makeBoard(map) {
 }
 
 export function rebuildSolid(b) {
-  b.solid = new Set(b.rock);
+  b.solid = new Set([...b.rock, ...b.water]);
   for (const t of b.towers) b.solid.add(t.cx + ',' + t.cy);
   computeField(b);
 }
@@ -88,6 +93,7 @@ export function nextStep(b, x, y) {
 export function canBuild(b, x, y) {
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return { ok: false, why: 'Utanför fältet' };
   const key = x + ',' + y;
+  if (b.water.has(key)) return { ok: false, why: 'Vatten' };
   if (b.solid.has(key)) return { ok: false, why: 'Upptaget' };
   if (x === b.entry[0] && y === b.entry[1]) return { ok: false, why: 'Ingången' };
   if (x === b.exit[0] && y === b.exit[1]) return { ok: false, why: 'Utgången' };

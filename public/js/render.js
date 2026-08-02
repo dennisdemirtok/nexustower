@@ -185,7 +185,7 @@ function drawBoard(G, b, s, hostile, ctx) {
     CX.translate((Math.random() - 0.5) * b.shake * 7, (Math.random() - 0.5) * b.shake * 7);
   }
 
-  drawGrid(b, s, hostile ? null : ctx);
+  drawGrid(b, s, hostile ? null : ctx, ctx.time);
   drawPath(b, s, hostile, ctx.time);
 
   if (!hostile) drawBuildOverlay(G, b, s);
@@ -213,7 +213,7 @@ function drawBoard(G, b, s, hostile, ctx) {
   CX.restore();
 }
 
-function drawGrid(b, s, G) {
+function drawGrid(b, s, G, time = 0) {
   const { cell, ox, oy } = s;
 
   /* Marken. Byggs en gång per bana och storlek och blittas sedan — den
@@ -249,11 +249,78 @@ function drawGrid(b, s, G) {
   for (let y = 0; y <= ROWS; y++) { CX.moveTo(ox, oy + y * cell); CX.lineTo(ox + COLS * cell, oy + y * cell); }
   CX.stroke();
 
+  /* Vattnet. Ritas som en sammanhängande yta i stället för ruta för ruta —
+     annars läser det som femton blå brickor och inte som en flod. Knepet
+     för djupet är att klippa mot vattnet och sedan dra strandlinjen med en
+     bred ljus penna: bara innerhalvan syns, och man får grunt vatten längs
+     kanten utan att räkna ut en enda extra form. */
+  if (b.water && b.water.size) {
+    const strand = () => {
+      CX.beginPath();
+      for (const key of b.water) {
+        const [x, y] = key.split(',').map(Number);
+        const px = ox + x * cell, py = oy + y * cell;
+        if (!b.water.has(x + ',' + (y - 1))) { CX.moveTo(px, py); CX.lineTo(px + cell, py); }
+        if (!b.water.has(x + ',' + (y + 1))) { CX.moveTo(px, py + cell); CX.lineTo(px + cell, py + cell); }
+        if (!b.water.has((x - 1) + ',' + y)) { CX.moveTo(px, py); CX.lineTo(px, py + cell); }
+        if (!b.water.has((x + 1) + ',' + y)) { CX.moveTo(px + cell, py); CX.lineTo(px + cell, py + cell); }
+      }
+    };
+
+    CX.save();
+    CX.beginPath();
+    for (const key of b.water) {
+      const [x, y] = key.split(',').map(Number);
+      CX.rect(ox + x * cell, oy + y * cell, cell, cell);
+    }
+    CX.clip();
+
+    CX.fillStyle = '#0e4a6b';
+    CX.fillRect(ox, oy, W, H);
+
+    // Grunt vatten längs stranden.
+    strand(); CX.strokeStyle = '#2a86ad'; CX.lineWidth = cell * 0.9; CX.stroke();
+    strand(); CX.strokeStyle = '#48a8c9'; CX.lineWidth = cell * 0.34; CX.stroke();
+
+    // Strömmen: glesa ljusband som glider i sidled.
+    CX.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const fas = time * (0.20 + i * 0.05) + i * 1.7;
+      const px = ox + ((fas % 1.6) / 1.6) * (W + cell * 4) - cell * 2;
+      const yy = oy + (i * 0.23 + 0.1) * ROWS * cell;
+      CX.strokeStyle = `rgba(190,240,255,${0.16 + (i % 2) * 0.10})`;
+      CX.lineWidth = cell * 0.055;
+      CX.beginPath();
+      CX.moveTo(px, yy);
+      CX.lineTo(px + cell * (0.7 + (i % 3) * 0.35), yy + Math.sin(fas) * cell * 0.05);
+      CX.stroke();
+    }
+    CX.restore();
+
+    // Skum precis på kanten, så gränsen mot land blir absolut tydlig.
+    strand();
+    CX.strokeStyle = 'rgba(200,248,255,.7)';
+    CX.lineWidth = 2;
+    CX.stroke();
+  }
+
   // Klippor: fasta hinder man varken kan bygga på eller gå igenom.
+  const rockImg = spriteFor.rock();
   for (const key of b.rock) {
     const [x, y] = key.split(',').map(Number);
     const px = gx(s, x), py = gy(s, y), r = cell * 0.42;
     dropShadow(CX, CX, px, py + r * 0.5, r * 1.0, r * 0.42);
+    if (rockImg) {
+      /* Samma sten överallt skulle läsa som ett mönster. Rutans koordinat
+         ger en fast vridning och storlek, så fältet ser ostädat ut utan att
+         något flyttar sig mellan bildrutor. */
+      CX.save();
+      CX.translate(px, py);
+      CX.rotate(((x * 7 + y * 13) % 8) * 0.785);
+      drawSprite(CX, rockImg, 0, 0, cell * (0.92 + ((x * 5 + y * 3) % 4) * 0.04));
+      CX.restore();
+      continue;
+    }
     const grd = CX.createLinearGradient(px, py - r, px, py + r);
     grd.addColorStop(0, '#9aa3b8');
     grd.addColorStop(0.55, '#6a7186');
