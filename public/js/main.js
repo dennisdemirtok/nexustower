@@ -649,6 +649,7 @@ window.NW = {
   get G() { return G; },
   hurtMe, endMatch,
   build: (x, y) => tryBuildAt(x, y, true),
+  send: key => send(key),
   /* Låter ett testskript driva spelklockan manuellt. Panelen som spelet
      körs i under utveckling fryser requestAnimationFrame, så utan den här
      går det inte att spela igenom en match automatiskt. */

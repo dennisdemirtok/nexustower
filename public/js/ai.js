@@ -99,14 +99,19 @@ function spendOnDefense(A, wave, prof) {
   const cfg = A.cfg;
   const wallCost = buildCost('wall', b.towers.length);
 
-  /* 1) Bygg labyrint. Måttet är inte längre fast: pressas AI:n hårt
-     förlänger den vägen i stället för att bara stå och ta emot. Utan det
-     nådde den sitt mål tidigt och byggde aldrig mer, hur mycket man än
-     skickade. */
-  const target = cfg.mazeTarget + Math.round(A.pressure * 9);
-  const wallCap = 34 + Math.round(A.pressure * 8);
+  /* 1) Bygg labyrint — men aldrig för hela kassan.
+     Måttet växer med pressen, fast med tak. Utan tak blev det en fälla:
+     ju hårdare man skickade desto längre mål satte den sig själv, och
+     eftersom bygget hoppade över uppgraderingarna stod den efter tre
+     minuter med tretton trästockar på nivå noll och ingen eldkraft alls.
+     Det var inte att den byggde för lite, det var att den byggde fel sak.
+     När vägen är halvvägs till målet sparas därför alltid ett par
+     uppgraderingar undan innan nästa mur får läggas. */
+  const target = Math.min(cfg.mazeTarget + Math.round(A.pressure * 4), cfg.mazeTarget + 10);
+  const wallCap = 34;
   const walls = b.towers.filter(t => !t.branch).length;
-  if (b.pathLen < target && walls < wallCap && A.gold >= wallCost) {
+  const reserv = b.pathLen >= cfg.mazeTarget * 0.6 ? wallCost * 6 : 0;
+  if (b.pathLen < target && walls < wallCap && A.gold >= wallCost + reserv) {
     const spot = nextPlanSpot(b);
     if (spot && canBuild(b, spot[0], spot[1]).ok) {
       A.gold -= wallCost;
