@@ -38,7 +38,11 @@ export function resize() {
   /* Alltid EN bana i taget, även på desktop. Man behöver ytan till sin egen
      labyrint — motståndaren kikar man på med VÄXLA VY när man vill. */
   L.mode = 'single';
-  const cell = Math.min((w - 24) / COLS, (h - 26) / ROWS);
+  /* Brädet krymps med en dryg halv ruta åt varje håll. Ytan går till ett
+     dekorband — staket, stubbar, kristaller — som ligger UTANFÖR rutnätet.
+     Poängen är att varje ruta på fältet ska betyda "här kan jag bygga" och
+     ingenting annat; allt som bara är utsmyckning hör hemma i bandet. */
+  const cell = Math.min((w - 24) / (COLS + 1.5), (h - 26) / (ROWS + 1.5));
   const ox = (w - cell * COLS) / 2, oy = (h - cell * ROWS) / 2;
   L.me = makeSlot(ox, oy, cell);
   L.foe = L.me;
@@ -179,12 +183,75 @@ function drawSlotLabel(s, text, color, board) {
   }
 }
 
+/* Dekorbandet runt fältet. Positionerna räknas ur banans egen form, så de
+   ligger likadant varje match men olika mellan banor. Inget här påverkar
+   spelet — det finns bara för att fältet ska läsa som en plats. */
+const PROPS = ['stump', 'plant', 'crystal', 'rock-2', 'rock-3', 'totem'];
+
+function drawSurround(b, s, hostile, time) {
+  const { cell, ox, oy } = s;
+  const W = COLS * cell, H = ROWS * cell;
+  const band = cell * 0.75;
+
+  // Markremsa under bandet, mörkare än fältet så gränsen syns.
+  CX.fillStyle = hostile ? 'rgba(40,10,28,.55)' : 'rgba(8,20,26,.55)';
+  CX.fillRect(ox - band, oy - band, W + band * 2, H + band * 2);
+  CX.clearRect(ox, oy, W, H);
+
+  const fence = spriteFor.prop('fence');
+  if (fence) {
+    /* Sektionerna sätts glesare än en per ruta och ritas något större, så
+       de överlappar till en linje. Tätt satta läste de som en massiv
+       plankvägg och tog över bilden — staketet ska rama in fältet, inte
+       tävla med det. Dämpningen gör att blicken stannar på brädet. */
+    CX.save();
+    CX.globalAlpha = 0.8;
+    const stor = cell * 1.25, sprang = cell * 1.5;
+    for (let px = ox + sprang * 0.4; px < ox + W; px += sprang) {
+      drawSprite(CX, fence, px, oy - band * 0.5, stor);
+      drawSprite(CX, fence, px, oy + H + band * 0.5, stor);
+    }
+    for (let py = oy + sprang * 0.4; py < oy + H; py += sprang) {
+      for (const px of [ox - band * 0.5, ox + W + band * 0.5]) {
+        CX.save(); CX.translate(px, py); CX.rotate(Math.PI / 2);
+        drawSprite(CX, fence, 0, 0, stor);
+        CX.restore();
+      }
+    }
+    CX.restore();
+  }
+
+  /* Props i hörnen och glest längs sidorna. Fröet kommer ur banans in- och
+     utgång, så varje bana får sin egen uppsättning utan att något behöver
+     skrivas in per karta. */
+  const fro = b.entry[0] * 31 + b.entry[1] * 7 + b.exit[0] * 13 + b.rock.size * 3;
+  const platser = [
+    [-0.55, -0.55], [COLS + 0.55, -0.55], [-0.55, ROWS + 0.55], [COLS + 0.55, ROWS + 0.55],
+    [-0.55, ROWS * 0.28], [COLS + 0.55, ROWS * 0.52],
+    [-0.55, ROWS * 0.72], [COLS + 0.55, ROWS * 0.18],
+    [COLS * 0.25, -0.55], [COLS * 0.72, ROWS + 0.55],
+  ];
+  platser.forEach(([gxr, gyr], i) => {
+    const img = spriteFor.prop(PROPS[(fro + i * 3) % PROPS.length]);
+    if (!img) return;
+    const px = ox + gxr * cell, py = oy + gyr * cell;
+    const stor = cell * (0.80 + ((fro + i) % 3) * 0.09);
+    dropShadow(CX, CX, px, py + stor * 0.30, stor * 0.30, stor * 0.13);
+    CX.save();
+    CX.translate(px, py + Math.sin(time * 0.9 + i) * cell * 0.012);
+    if ((fro + i) % 2) CX.scale(-1, 1);      // spegelvänd varannan
+    drawSprite(CX, img, 0, 0, stor);
+    CX.restore();
+  });
+}
+
 function drawBoard(G, b, s, hostile, ctx) {
   CX.save();
   if (b.shake > 0) {
     CX.translate((Math.random() - 0.5) * b.shake * 7, (Math.random() - 0.5) * b.shake * 7);
   }
 
+  drawSurround(b, s, hostile, ctx.time);
   drawGrid(b, s, hostile ? null : ctx, ctx.time);
   drawPath(b, s, hostile, ctx.time);
 

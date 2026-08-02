@@ -72,6 +72,7 @@ export const spriteFor = {
   creep: key => sprite(`creep-${(CREEPS[key] && CREEPS[key].sprite) || key}`),
   panel: () => sprite('ui-panel'),
   rock: () => sprite('rock'),
+  prop: name => sprite(name),
   /* Åtta riktningar på rad i en bild. Finns arket används det, annars
      ritas creepen orienterad som den är målad. Det här är det enda som
      3D-modellerna ger som en målad sprite inte kan: en creep som faktiskt
