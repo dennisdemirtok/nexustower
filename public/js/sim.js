@@ -242,7 +242,11 @@ function stepCreeps(b, dt, hooks) {
       if (c.dead) continue;
     }
     if (c.regen && c.hp < c.maxHp) c.hp = Math.min(c.maxHp, c.hp + c.regen * dt);
-    c.wob += dt * 6;
+    /* Stegtakten drivs av tillryggalagd sträcka, inte av klockan. En snabb
+       varg tar därför fler steg än en trög golem i stället för att båda
+       vicka lika fort — det var det som fick dem att se ut att glida i
+       stället för att gå. Bromsas creepen av is saktar stegen med. */
+    c.wob += (c.fly ? dt * 5 : c.spd * (1 - c.slow) * dt * 4.2);
     c.bob += dt * 2.4;
 
     /* t < 0 är utsläppsfördröjning så en grupp inte spawnar ovanpå varandra.

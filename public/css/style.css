@@ -102,6 +102,10 @@ button,input{font-family:inherit;color:inherit}
   100%{transform:scale(1);color:var(--coral);text-shadow:none}
 }
 .stat.elives{color:var(--coral)}
+.stat.einc{color:var(--dim);font-size:11px}
+/* Ligger man under lyser den — det är den enda siffran i HUD:en som byter
+   färg efter hur det faktiskt går. */
+.stat.einc.bakom{color:var(--coral);font-weight:700}
 .stat.gold{color:var(--gold)}
 .stat.inc{color:var(--cy);font-size:12px;position:relative}
 .stat.inc i{

@@ -550,17 +550,12 @@ function drawTower(tw, s, hostile, time) {
 
   dropShadow(CX, CX, x, y + size * 0.34, size * 0.44, size * 0.19);
 
-  const rikt = spriteFor.towerDirs(tw.lv, tw.branch);
-  const img = rikt || spriteFor.tower(tw.type, tw.lv, tw.branch);
-  if (rikt) {
-    // Riktat torn: åtta renderade vyer, ingen vridning i planet.
-    CX.save();
-    CX.translate(x, y + idle + (tw.recoil || 0) * size * 0.1);
-    drawDirSprite(CX, rikt, 0, 0, size * 1.18, tw.angle);
-    CX.restore();
-    muzzle(tw, x, y + idle, size, face.color);
-    return;
-  }
+  /* Tornet står stilla. Vi provade åtta renderade vyer så pjäsen kunde
+     följa målet, men resultatet blev värre än problemet: tornet kastade om
+     sig varje gång den bytte mål och läste som att hela byggnaden ryckte
+     till. Ett torn är fastbyggt i marken. Riktningen bärs av mynnings-
+     blixten och av skottet, som båda pekar mot det som beskjuts. */
+  const img = spriteFor.tower(tw.type, tw.lv, tw.branch);
   if (img) {
     /* De renderade tornen står stilla. En bild tagen snett uppifrån ser fel
        ut när den snurras i planet — och en palissad eller en smedja har
@@ -796,7 +791,16 @@ function drawCreep(c, s, time) {
   // Flygande creeps ritas med höjd: skugga på marken, kropp ovanför.
   const alt = c.fly ? cell * 0.34 + Math.sin(c.bob) * cell * 0.05 : 0;
   const y = c._sy - alt;
-  const wob = c.fly ? 0 : Math.sin(c.wob) * r * 0.12;
+  /* Gången. Tidigare var det en sidledsvickning, vilket läser som att
+     creepen halkar i sidled. Nu lyfts kroppen på varje steg och plattas
+     till i nedslaget — samma trick som en gånganimation gör, fast utan
+     bildrutor. Absolutbeloppet ger två nedslag per period, alltså två ben. */
+  const steg = c.fly ? 0 : Math.abs(Math.sin(c.wob));
+  const wob = c.fly ? 0 : -steg * r * 0.16;
+  const gangY = c.fly ? 1 : 1 - (1 - steg) * 0.10;
+  const gangX = c.fly ? 1 : 1 + (1 - steg) * 0.07;
+  // Lätt vaggning i sidled ovanpå — men bråkdelen av vad den var.
+  const lut = c.fly ? 0 : Math.sin(c.wob * 0.5) * 0.05;
 
   /* Dödsklappen: kroppen plattas ihop mot marken och tonar ut på ett
      kvarts sekund. Fram till nu togs creepen bort på samma bildruta som
@@ -815,7 +819,8 @@ function drawCreep(c, s, time) {
   if (cimg) {
     CX.save();
     CX.translate(x, y + wob + (c.dead ? r * dieT * 0.5 : 0));
-    CX.scale(sqX, sqY);
+    if (!c.dead) CX.rotate(lut);
+    CX.scale(sqX * gangX, sqY * gangY);
     if (c.flash > 0) { CX.filter = 'brightness(2.4)'; }
     if (sheet) drawDirSprite(CX, sheet, 0, 0, r * 2.4, c.dir ?? Math.PI / 2);
     else drawSprite(CX, cimg, 0, 0, r * 2.4);
@@ -827,7 +832,8 @@ function drawCreep(c, s, time) {
 
   CX.save();
   CX.translate(x, y + wob + (c.dead ? r * dieT * 0.5 : 0));
-  CX.scale(sqX, sqY);
+  if (!c.dead) CX.rotate(lut);
+  CX.scale(sqX * gangX, sqY * gangY);
 
   if (c.slow > 0) {
     CX.beginPath(); CX.arc(0, 0, r + 3.5, 0, 7);

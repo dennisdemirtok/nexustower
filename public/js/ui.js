@@ -75,6 +75,16 @@ export function updateHUD() {
   $('eLives').textContent = Math.max(0, G.foe.board.lives);
   $('gold').textContent = Math.floor(G.me.gold);
   $('inc').textContent = Math.round(G.me.income);
+  /* Motståndarens inkomst. Hela spelet är en kapplöpning i ekonomi, och
+     utan den här siffran spelade man i blindo — man såg att man låg efter
+     först när creepsen man inte klarade redan stod på banan. Färgen säger
+     om man leder eller ligger under. */
+  const ei = $('eInc');
+  if (ei) {
+    const fi = Math.round(G.foe.income || 0);
+    ei.textContent = fi;
+    ei.parentElement.classList.toggle('bakom', fi > Math.round(G.me.income));
+  }
   const t = Math.floor(G.time);
   $('wave').textContent = G.prep > 0
     ? `BYGG · ${Math.ceil(G.prep)}s`
