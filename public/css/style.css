@@ -101,6 +101,23 @@ button,input{font-family:inherit;color:inherit}
   0%{transform:scale(1.35);color:#fff;text-shadow:0 0 12px var(--coral)}
   100%{transform:scale(1);color:var(--coral);text-shadow:none}
 }
+.setrow{display:flex;gap:8px;margin:4px 0 12px}
+.sethelp{font-size:11.5px;line-height:1.55;color:var(--dim);margin-bottom:14px}
+.sethelp b{color:var(--cy);font-weight:700}
+
+.armcard .buy{
+  display:block;width:100%;margin-top:8px;padding:9px 6px;
+  background:var(--cy);color:#00232b;border:none;
+  font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:11px;
+  letter-spacing:.06em;cursor:pointer;
+  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+}
+.armcard .buy:active{transform:scale(.96)}
+.armcard.poor .buy{background:var(--line2);color:var(--dim);pointer-events:none}
+.armcard .buy.done{background:none;border:1px solid var(--line2);color:var(--dim);text-align:center}
+.armcard .gain{font-size:10px;color:var(--dim);margin-top:6px;letter-spacing:.03em}
+.armcard .gain b{color:var(--cy);font-weight:700}
+
 .stat.elives{color:var(--coral)}
 .stat.einc{color:var(--dim);font-size:11px}
 /* Ligger man under lyser den — det är den enda siffran i HUD:en som byter

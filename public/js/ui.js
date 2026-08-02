@@ -26,6 +26,14 @@ export function initUI(handlers) {
   $('armoryBtn').addEventListener('click', () => openArmory());
   $('researchBtn').addEventListener('click', () => openResearch());
   $('infoBtn').addEventListener('click', () => openInfo());
+  // Ljudknappen bor numera i kugghjulspanelen, inte i HUD:en.
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('#sheetSound');
+    if (b) {
+      $('soundBtn').click();
+      b.textContent = ($('soundBtn').textContent === '🔊' ? '🔊' : '🔇') + ' LJUD PÅ/AV';
+    }
+  });
   $('sheetScrim').addEventListener('click', () => closeSheets());
 
   const sb = $('soundBtn');
@@ -444,14 +452,26 @@ export function openArmory(focusKey) {
     const el = document.createElement('div');
     el.className = 'armcard' + (maxed ? ' max' : '') + ((locked || G.me.gold < cost) ? ' poor' : '');
     el.style.outline = focusKey === key ? '1px solid var(--amber)' : '';
+    /* Kortet såg ut som information: pris i cyan, "nivå 0/5", ingenting som
+       sa att man kunde trycka. Nu står köpet som en knapp med ordet
+       UPPGRADERA och priset, och HP-raden visar vad man faktiskt får för
+       pengarna — annars är +35 % en abstraktion. */
+    const hpNu = Math.round(d.hp * Math.pow(1.35, lv));
+    const hpSen = Math.round(d.hp * Math.pow(1.35, lv + 1));
     el.innerHTML = `${creepIcon(key, 22)}
       <div class="nm">${d.nm}</div>
       ${clsChip(d.cls)}
       <div class="lv">${locked ? '🔒 ' + d.unlockMin + ' min' : 'nivå ' + lv + '/' + ECON.maxSendLv}</div>
       <div class="note">${d.note}</div>
-      <div class="pr">${maxed ? 'MAX' : locked ? '—' : '◆' + cost}</div>
-      <div class="pips">${Array.from({ length: ECON.maxSendLv }, (_, i) => `<span class="${i < lv ? 'on' : ''}"></span>`).join('')}</div>`;
-    if (!maxed && !locked) el.addEventListener('pointerdown', e => { e.stopPropagation(); H.upgradeSend(key); });
+      <div class="pips">${Array.from({ length: ECON.maxSendLv }, (_, i) => `<span class="${i < lv ? 'on' : ''}"></span>`).join('')}</div>
+      ${locked ? '' : maxed
+        ? '<div class="buy done">MAX NIVÅ</div>'
+        : `<div class="gain">HP ${hpNu} <b>→ ${hpSen}</b></div>
+           <button class="buy" type="button">UPPGRADERA ◆${cost}</button>`}`;
+    if (!maxed && !locked) {
+      const knapp = el.querySelector('.buy');
+      knapp.addEventListener('pointerdown', e => { e.stopPropagation(); H.upgradeSend(key); });
+    }
     row.appendChild(el);
   }
   openSheet($('armorySheet'));
@@ -491,6 +511,11 @@ export function openResearch() {
 }
 
 /* Hela kontramatrisen — utan den är systemet osynligt för spelaren. */
+/* Kugghjulet samlar allt man bara läser eller ställer in en gång: ljud,
+   hjälptexten och skadetypstabellen. Tidigare låg ljudet uppe i HUD:en och
+   typerna som en egen knapp i bottenraden — två ytor för saker man rör
+   sällan, medan FORSKA och ARMÉ som används i varje match fick samma
+   utrymme. */
 export function openInfo() {
   const clsKeys = Object.keys(ARMOR);
   const head = clsKeys.map(c =>
@@ -519,6 +544,22 @@ export function openInfo() {
       att se vad du ska skicka mot motståndarens torn. <b>FLYG</b> följer inte vägen — de
       går rakt över banan, så ett torn i hörnet hinner aldrig skjuta på dem.</div>
     <div class="cilist">${creeps}</div>`;
+  const extra = `
+    <div class="setrow">
+      <button class="btn" id="sheetSound" type="button">🔊 LJUD PÅ/AV</button>
+    </div>
+    <div class="sethelp">
+      <b>Så spelar du.</b> Dra över fältet för att bygga en rad torn. Creepsen
+      söker sig alltid runt det du byggt, så en lång slinga håller dem under
+      eld längre — men du får aldrig stänga vägen helt.<br><br>
+      <b>Ekonomin.</b> Varje creep du skickar höjer din inkomst permanent. Den
+      är hela motorn: skickar du inget står du still medan motståndaren växer.
+      Men skickar du allt står du utan försvar när de tunga creepsen låses upp.<br><br>
+      <b>Element.</b> Forska fram ett element för att uppgradera torn förbi
+      nivå 3. Tabellen nedan visar vad varje skadetyp gör mot varje
+      pansarklass — flygande går rakt över labyrinten.
+    </div>`;
+  $('infoSheet').insertAdjacentHTML('afterbegin', extra);
   openSheet($('infoSheet'));
 }
 
