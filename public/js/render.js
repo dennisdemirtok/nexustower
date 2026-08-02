@@ -483,7 +483,17 @@ function drawTower(tw, s, hostile, time) {
 
   dropShadow(CX, CX, x, y + size * 0.34, size * 0.44, size * 0.19);
 
-  const img = spriteFor.tower(tw.type, tw.lv, tw.branch);
+  const rikt = spriteFor.towerDirs(tw.lv, tw.branch);
+  const img = rikt || spriteFor.tower(tw.type, tw.lv, tw.branch);
+  if (rikt) {
+    // Riktat torn: åtta renderade vyer, ingen vridning i planet.
+    CX.save();
+    CX.translate(x, y + idle + (tw.recoil || 0) * size * 0.1);
+    drawDirSprite(CX, rikt, 0, 0, size * 1.18, tw.angle);
+    CX.restore();
+    muzzle(tw, x, y + idle, size, face.color);
+    return;
+  }
   if (img) {
     /* De renderade tornen står stilla. En bild tagen snett uppifrån ser fel
        ut när den snurras i planet — och en palissad eller en smedja har

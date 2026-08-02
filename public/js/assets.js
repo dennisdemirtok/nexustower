@@ -24,6 +24,11 @@ try {
 } catch { /* körs även utan DOM i testharnessen */ }
 export const artSet = () => set;
 
+const towerSpriteName = (lv, branch) =>
+  lv <= 0 ? 'tower-wood'
+  : lv <= 2 ? 'tower-stone'
+  : `tower-${branch || 'eld'}-${lv >= 5 ? 2 : 1}`;
+
 /* Hämtar en sprite. Returnerar null tills bilden är laddad, och för
    alltid null om den inte finns — anroparen ritar då sin egen version. */
 export function sprite(name) {
@@ -56,10 +61,12 @@ export const spriteFor = {
   /* Tre pilbågsnivåer delar två bilder, sedan två steg per element:
      nivå 4-5 = steg 1, nivå 6-7 = steg 2. */
   tower(type, lv, branch) {
-    if (lv <= 0) return sprite('tower-wood');
-    if (lv <= 2) return sprite('tower-stone');
-    return sprite(`tower-${branch || 'eld'}-${lv >= 5 ? 2 : 1}`);
+    return sprite(towerSpriteName(lv, branch));
   },
+  /* Ett torn med en pipa måste peka mot målet, ett runt torn ska stå
+     stilla. Skillnaden avgörs av om det finns ett riktningsark för just
+     den bilden — kanonen har ett, palissaden har inget. */
+  towerDirs: (lv, branch) => sprite(towerSpriteName(lv, branch) + '-dirs'),
   /* Creepen pekar ut sin bild själv, så flera creeps kan dela sprite
      och namnbyten i speldatan inte kräver att filer döps om. */
   creep: key => sprite(`creep-${(CREEPS[key] && CREEPS[key].sprite) || key}`),
