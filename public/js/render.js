@@ -1,7 +1,8 @@
 import { COLS, ROWS, CREEPS, ARMOR, towerFace, towerStat } from './config.js';
 import { cPos, routeCells } from './board.js';
 import { terrainFor, dropShadow, shade } from './art.js';
-import { spriteFor, drawSprite } from './assets.js';
+import { spriteFor, drawSprite, artSet, drawDirSprite,
+} from './assets.js';
 
 /* ============================================================
    Rendering.
@@ -484,9 +485,14 @@ function drawTower(tw, s, hostile, time) {
 
   const img = spriteFor.tower(tw.type, tw.lv, tw.branch);
   if (img) {
+    /* De renderade tornen står stilla. En bild tagen snett uppifrån ser fel
+       ut när den snurras i planet — och en palissad eller en smedja har
+       ingen framsida att vrida ändå. Riktningen mot målet visas i stället
+       av mynningsblixten och av skottet. De målade tornen har en tydlig
+       pjäs och fortsätter vridas. */
     CX.save();
     CX.translate(x, y + idle);
-    CX.rotate(tw.angle + Math.PI / 2);
+    CX.rotate(artSet() === '3d' ? 0 : tw.angle + Math.PI / 2);
     CX.translate(0, (tw.recoil || 0) * size * 0.1);
     drawSprite(CX, img, 0, 0, size * 1.18);
     CX.restore();
@@ -727,13 +733,15 @@ function drawCreep(c, s, time) {
   dropShadow(CX, CX, x, c._sy + (c.fly ? cell * 0.08 : r * 0.55),
              r * (c.fly ? 0.8 : 0.95) * sqX, r * (c.fly ? 0.32 : 0.4));
 
-  const cimg = spriteFor.creep(c.type);
+  const sheet = spriteFor.creepDirs(c.type);
+  const cimg = sheet || spriteFor.creep(c.type);
   if (cimg) {
     CX.save();
     CX.translate(x, y + wob + (c.dead ? r * dieT * 0.5 : 0));
     CX.scale(sqX, sqY);
     if (c.flash > 0) { CX.filter = 'brightness(2.4)'; }
-    drawSprite(CX, cimg, 0, 0, r * 2.4);
+    if (sheet) drawDirSprite(CX, sheet, 0, 0, r * 2.4, c.dir ?? Math.PI / 2);
+    else drawSprite(CX, cimg, 0, 0, r * 2.4);
     CX.restore();
     if (!c.dead) drawCreepBars(c, s, x, y, r, cell);
     if (c.dead) CX.restore();

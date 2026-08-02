@@ -64,7 +64,22 @@ export const spriteFor = {
      och namnbyten i speldatan inte kräver att filer döps om. */
   creep: key => sprite(`creep-${(CREEPS[key] && CREEPS[key].sprite) || key}`),
   panel: () => sprite('ui-panel'),
+  /* Åtta riktningar på rad i en bild. Finns arket används det, annars
+     ritas creepen orienterad som den är målad. Det här är det enda som
+     3D-modellerna ger som en målad sprite inte kan: en creep som faktiskt
+     vänder sig i kurvan i stället för att glida sidledes genom den. */
+  creepDirs: key => sprite(`creep-${(CREEPS[key] && CREEPS[key].sprite) || key}-dirs`),
 };
+
+export const DIRS = 8;
+
+/* Ritar rätt ruta ur riktningsarket. Vinkeln är i skärmkoordinater, alltså
+   0 = åt höger och växande medurs. */
+export function drawDirSprite(ctx, sheet, x, y, size, angle) {
+  const f = sheet.naturalHeight;
+  const k = ((Math.round(angle / (Math.PI * 2 / DIRS)) % DIRS) + DIRS) % DIRS;
+  ctx.drawImage(sheet, k * f, 0, f, f, x - size / 2, y - size / 2, size, size);
+}
 
 /* Rita en sprite centrerad i en ruta, skalad efter rutstorleken.
    Bilderna antas vara kvadratiska och sedda uppifrån. */

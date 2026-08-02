@@ -252,8 +252,23 @@ function stepCreeps(b, dt, hooks) {
     const step = c.spd * (1 - c.slow) * dt;
     let arrived = false;
 
+    /* Färdriktningen. Den behövs för att creepen ska vända sig när banan
+       svänger — utan den gick de sidledes genom kurvorna som möbler på
+       hjul. Vinkeln dras mjukt mot målet i stället för att snäppa, annars
+       byter de håll på en bildruta i varje hörn. */
+    const styr = (mx, my) => {
+      if (!mx && !my) return;
+      const mal = Math.atan2(my, mx);
+      if (c.dir === undefined) { c.dir = mal; return; }
+      let d = mal - c.dir;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      c.dir += d * Math.min(1, dt * 9);
+    };
+
     if (c.fly) {
       c.t += step;
+      styr(b.air.x1 - b.air.x0, b.air.y1 - b.air.y0);
       arrived = c.t >= b.air.len;
     } else {
       /* Följ flödesfältet: gå mot grannrutan med kortast väg till målet.
@@ -268,6 +283,7 @@ function stepCreeps(b, dt, hooks) {
         const ty = (n ? n.y : b.exit[1]) + c.jy;
         const dx = tx - c.x, dy = ty - c.y;
         const d = Math.hypot(dx, dy);
+        styr(dx, dy);
         if (d <= step || d < 0.02) { c.x = tx; c.y = ty; }
         else { c.x += dx / d * step; c.y += dy / d * step; }
       }
