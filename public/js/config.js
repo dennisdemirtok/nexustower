@@ -1,3 +1,30 @@
+/* ---------- svårighetsgrader ----------
+   Skalar banans egen AI-profil. De tre första fuskar inte: skillnaden är
+   hur ofta WARDEN tänker, hur väl den läser hotbilden och hur långt den
+   orkar bygga. BRUTAL får dessutom mer inkomst — det står i klartext på
+   knappen, annars vore det bara orättvist.                              */
+export const DIFFS = [
+  { id: 'lugn',   nm: 'LUGN',   sub: 'Skickar sällan · −25 % inkomst',
+    iq: 0.50, tick: 1.50, aggr: 0.45, maze: 0.70, eco: 0.75 },
+  { id: 'normal', nm: 'NORMAL', sub: 'Banans egen styrka',
+    iq: 1.00, tick: 1.00, aggr: 1.00, maze: 1.00, eco: 1.00 },
+  { id: 'svar',   nm: 'SVÅR',   sub: 'Tänker dubbelt så ofta, kontrar rätt',
+    iq: 1.40, tick: 0.65, aggr: 1.20, maze: 1.25, eco: 1.00 },
+  { id: 'brutal', nm: 'BRUTAL', sub: 'Spelar optimalt · +30 % inkomst',
+    iq: 1.70, tick: 0.45, aggr: 1.35, maze: 1.40, eco: 1.30 },
+];
+export const diffById = id => DIFFS.find(d => d.id === id) || DIFFS[1];
+
+export function applyDiff(ai, id) {
+  const d = diffById(id);
+  return { ...ai, diff: d,
+    iq: Math.min(1, ai.iq * d.iq),
+    tick: ai.tick * d.tick,
+    aggr: Math.min(0.95, ai.aggr * d.aggr),
+    mazeTarget: Math.round(ai.mazeTarget * d.maze),
+    eco: d.eco };
+}
+
 /* ============================================================
    NEXUS WARS — balans & speldata
    All tuning bor här. Rör inget annat för att ändra känslan.

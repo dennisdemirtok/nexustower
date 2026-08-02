@@ -10,7 +10,7 @@
 import {
   MAPS, ECON, CREEPS, CREEP_KEYS, TOWER_KEYS, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, creepIncome, sendUpCost, towerStat, needsBranch, waveHpMul, BRANCH_KEYS, creepUnlocked,
-  RESEARCH, researchCost, requiredResearch,
+  RESEARCH, researchCost, requiredResearch, applyDiff,
 } from '../public/js/config.js';
 import { makeBoard, canBuild, rebuildSolid, routeCells, nextPlanSpot } from '../public/js/board.js';
 import { spawn, stepBoard, towerDps, towerDpsVs } from '../public/js/sim.js';
@@ -42,7 +42,7 @@ function makeSide(name) {
 const P = makeSide('SPELARE(' + style + ')');
 P.seen = { latt: 0, tung: 0, pans: 0, flyg: 0 };
 const A = makeSide('WARDEN(' + M.ai.nm + ')');
-initAI(A, M.ai, A.board);
+initAI(A, applyDiff(M.ai, process.env.NW_DIFF || 'normal'), A.board);
 
 /* ---- spelarens "hjärna" ---- */
 function profile() {
@@ -150,7 +150,7 @@ while (time < 60 * 30 && !winner) {
   time += STEP;
   if (prep > 0) prep -= STEP;
   incT -= STEP;
-  if (incT <= 0) { incT += ECON.incInterval; P.gold += P.income; A.gold += A.income; }
+  if (incT <= 0) { incT += ECON.incInterval; P.gold += P.income * (P.cfg?.eco || 1); A.gold += A.income * (A.cfg?.eco || 1); }
   waveT -= STEP;
   if (waveT <= 0) { waveT += ECON.waveInterval; wave++; }
 

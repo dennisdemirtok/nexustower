@@ -1,7 +1,7 @@
 import {
   MAPS, TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, sendUpCost, creepIncome, waveHpMul, towerStat, towerFace, needsBranch,
-  BRANCH_KEYS, RESEARCH, researchCost, requiredResearch, creepUnlocked,
+  BRANCH_KEYS, RESEARCH, researchCost, requiredResearch, creepUnlocked, applyDiff,
 } from './config.js';
 import { makeBoard, towerAt, canBuild, rebuildSolid } from './board.js';
 import { spawn, stepBoard, stepRemote, addFx, addFloat, addParts } from './sim.js';
@@ -46,7 +46,7 @@ function newMatch({ mode, mapIndex, foeName }) {
   G.me.board = makeBoard(M);
   G.foe.board = makeBoard(M);
 
-  if (mode === 'campaign') initAI(G.foe, M.ai, G.foe.board);
+  if (mode === 'campaign') initAI(G.foe, applyDiff(M.ai, UI.getDiff()), G.foe.board);
   else { G.foe.board.remote = true; G.foe.board._map = new Map(); }
 
   UI.setState(G);
@@ -77,7 +77,7 @@ function update(dt) {
   if (G.incT <= 0) {
     G.incT += ECON.incInterval;
     G.me.gold += G.me.income;
-    G.foe.gold += G.foe.income;
+    G.foe.gold += G.foe.income * (G.foe.cfg?.eco || 1);
     UI.pop('gold');
     Audio.sfx.income();
   }

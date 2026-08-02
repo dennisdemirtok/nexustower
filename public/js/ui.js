@@ -2,7 +2,7 @@ import {
   TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, MAPS, ECON, DMG, ARMOR, TYPE_VS,
   buildCost, sendUpCost, creepIncome, MAX_TOWER_LV, BASE_LEVELS,
   towerStat, towerFace, needsBranch, branchKeysFor,
-  RESEARCH, researchCost, requiredResearch, BRANCH_KEYS, creepUnlocked,
+  RESEARCH, researchCost, requiredResearch, BRANCH_KEYS, creepUnlocked, DIFFS,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
 import * as Audio from './audio.js';
@@ -479,6 +479,8 @@ export function showMenu(mode) {
     return;
   }
 
+  renderDiffPicker();
+
   const cleared = loadCleared();
   const ml = $('maplist');
   ml.classList.remove('hidden');
@@ -494,6 +496,24 @@ export function showMenu(mode) {
     if (!locked) el.addEventListener('click', () => H.startCampaign(i));
     ml.appendChild(el);
   });
+}
+
+/* Svårighetsgraden gäller alla banor och överlever omladdning. Den sitter
+   ovanför banlistan eftersom man vill välja motstånd före bana. */
+let diffId = (() => { try { return localStorage.getItem('nw_diff') || 'normal'; } catch { return 'normal'; } })();
+export const getDiff = () => diffId;
+
+function renderDiffPicker() {
+  const box = $('diffpick');
+  if (!box) return;
+  box.innerHTML = DIFFS.map(d =>
+    `<button class="diffbtn${d.id === diffId ? ' on' : ''}" data-d="${d.id}">
+       <b>${d.nm}</b><span>${d.sub}</span></button>`).join('');
+  box.querySelectorAll('.diffbtn').forEach(b => b.addEventListener('click', () => {
+    diffId = b.dataset.d;
+    try { localStorage.setItem('nw_diff', diffId); } catch {}
+    renderDiffPicker();
+  }));
 }
 
 export function showMatchmaking(text, sub) {
