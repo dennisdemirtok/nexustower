@@ -288,6 +288,9 @@ function drawGrid(b, s, G, time = 0) {
      vansinne att rita om varje bildruta. */
   const W = COLS * cell, H = ROWS * cell;
   const hostile = !G;
+  /* Marken lyfts en aning. Den omfärgade texturen blev för mörk: allt som
+     står på ett mörkt underlag tappar sin egen volym och läser platt. */
+  CX.filter = 'brightness(1.28) saturate(1.15)';
   const groundImg = spriteFor.terrain();
   if (groundImg) {
     // Bilden kaklas över fältet så en 1024-ruta räcker till hela banan.
@@ -302,12 +305,26 @@ function drawGrid(b, s, G, time = 0) {
   } else {
     CX.drawImage(terrainFor(b, cell, b.entry[0] * 31 + b.exit[1] * 7 + b.rock.size, hostile), ox, oy, W, H);
   }
+  CX.filter = 'none';
   /* Ramen och rutnätet ligger i gränssnittets egna färger. Tidigare var de
      varmvita mot varm mark och försvann; mot den mörka marken blir cyanen
      den enda ljusa linjen på fältet och därmed lätt att följa. */
   CX.strokeStyle = hostile ? 'rgba(255,93,115,.5)' : 'rgba(0,242,255,.42)';
   CX.lineWidth = 2;
   CX.strokeRect(ox, oy, W, H);
+
+  /* Schackmönstret. Det är det enda i Clash Royales arena som ger skala:
+     utan det har ingenting på planen en storlek att jämföras med, och
+     brädet läser som en jämn yta man klistrat figurer på. Två rutor ljusa,
+     två mörka — så svagt att det aldrig konkurrerar med bygg-overlayen,
+     men tillräckligt för att man ska se att en jätte är två rutor bred. */
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if ((x + y) % 2) continue;
+      CX.fillStyle = hostile ? 'rgba(255,190,220,.045)' : 'rgba(190,255,240,.05)';
+      CX.fillRect(ox + x * cell, oy + y * cell, cell, cell);
+    }
+  }
 
   CX.strokeStyle = hostile ? 'rgba(255,93,115,.07)' : 'rgba(0,242,255,.075)';
   CX.lineWidth = 1;
