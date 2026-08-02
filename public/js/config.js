@@ -361,7 +361,7 @@ export const CREEPS = {
 
   // ---- T1, från start ----
   far: {
-    nm: 'FÅR', shape: 'blob', color: '#e8e2d0', cls: 'latt', sprite: 'swarm',
+    nm: 'LARV', shape: 'blob', color: '#e8e2d0', cls: 'latt', sprite: 'swarm',
     hp: 30, spd: 1.6, r: 0.20, cost: 25, leak: 1, unlockMin: 0,
     note: 'Basen. Billigast vägen till inkomst.',
   },
@@ -371,7 +371,7 @@ export const CREEPS = {
     note: '25 % snabbare — hinner förbi långsamma torn',
   },
   vildsvin: {
-    nm: 'VILDSVIN', shape: 'tank', color: '#a9713f', cls: 'tung', sprite: 'grunt',
+    nm: 'SKALBAGGE', shape: 'tank', color: '#a9713f', cls: 'tung', sprite: 'grunt',
     hp: 130, spd: 1.15, r: 0.26, cost: 60, leak: 1, unlockMin: 0,
     note: 'Långsam tank. Bäst HP per guld i T1.',
   },
@@ -388,7 +388,7 @@ export const CREEPS = {
     note: 'FLYG — går rakt över labyrinten',
   },
   shaman: {
-    nm: 'SHAMAN', shape: 'blob', color: '#3ddc97', cls: 'tung', sprite: 'regen',
+    nm: 'IRRBLOSS', shape: 'blob', color: '#3ddc97', cls: 'tung', sprite: 'regen',
     hp: 320, spd: 1.3, r: 0.27, cost: 280, leak: 2, unlockMin: 2,
     healAura: 26, healRange: 2.2,
     note: 'Läker alla creeps omkring sig — döda den först',
@@ -401,12 +401,12 @@ export const CREEPS = {
     note: 'PANSAR — kinetisk och elektrisk studsar av',
   },
   wyvern: {
-    nm: 'WYVERN', shape: 'wing', color: '#b57bff', cls: 'flyg', fly: true, sprite: 'brood',
+    nm: 'TROLLSLÄNDA', shape: 'wing', color: '#b57bff', cls: 'flyg', fly: true, sprite: 'brood',
     hp: 1900, spd: 1.9, r: 0.32, cost: 900, leak: 2, unlockMin: 4,
     note: 'Snabb FLYG — kräver riktigt luftvärn',
   },
   prastinna: {
-    nm: 'PRÄSTINNA', shape: 'blob', color: '#7fe8d0', cls: 'pans', sprite: 'shade',
+    nm: 'VÄKTARE', shape: 'blob', color: '#7fe8d0', cls: 'pans', sprite: 'shade',
     hp: 2800, spd: 1.1, r: 0.30, cost: 1200, leak: 3, unlockMin: 4,
     magicImmune: true,
     note: 'Magiimmun: ELD, IS och BLIXT gör 25 % skada',
@@ -414,7 +414,7 @@ export const CREEPS = {
 
   // ---- T4, 12 minuter ----
   jatte: {
-    nm: 'JÄTTE', shape: 'boss', color: '#5bb8e0', cls: 'pans', sprite: 'warden',
+    nm: 'URPADDA', shape: 'boss', color: '#5bb8e0', cls: 'pans', sprite: 'warden',
     hp: 9000, spd: 0.85, r: 0.42, cost: 3000, leak: 4, unlockMin: 7,
     towerDebuff: 0.35, debuffRange: 2.6,
     note: 'Sänker eldkraften hos torn den passerar med 35 %',
@@ -434,13 +434,13 @@ export const CREEPS = {
   bandit: {
     nm: 'BANDIT', shape: 'dart', color: '#e0a03d', cls: 'latt', sprite: 'bandit',
     hp: 900, spd: 1.25, r: 0.30, cost: 350, leak: 1, unlockMin: 3,
-    siege: 55, siegeRange: 1.6,
+    siege: 40, siegeRange: 1.6,
     note: 'Skjuter på tornen den passerar — flytta inte allt till en rad',
   },
   krossare: {
     nm: 'KROSSARE', shape: 'boss', color: '#c94f2e', cls: 'pans', sprite: 'krossare',
     hp: 26000, spd: 0.75, r: 0.48, cost: 7000, leak: 6, unlockMin: 13,
-    siege: 900, siegeRange: 2.0,
+    siege: 620, siegeRange: 2.0,
     note: 'River torn. Det enda som tvingar fram ombyggnad mitt i matchen',
   },
   svarm: {

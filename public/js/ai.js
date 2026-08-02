@@ -117,7 +117,7 @@ function spendOnDefense(A, wave, prof) {
       A.gold -= wallCost;
       b.towers.push({
         type: 'wall', cx: spot[0], cy: spot[1], lv: 0, branch: null,
-        cd: 0, recoil: 0, invested: wallCost, angle: -1.57, flash: 0, hp: wallCost * 12, maxHp: wallCost * 12,
+        cd: 0, recoil: 0, invested: wallCost, angle: -1.57, flash: 0, hp: wallCost * 60, maxHp: wallCost * 60,
       });
       rebuildSolid(b);
       return;
@@ -175,7 +175,7 @@ function spendOnDefense(A, wave, prof) {
     if (c.t.lv >= BASE_LEVELS) c.t.branch = c.br || c.t.branch || 'a';
     c.t.invested += c.cost;
     // Livet följer investeringen — ett uppgraderat torn tål mer belägring.
-    c.t.maxHp = c.t.invested * 12;
+    c.t.maxHp = c.t.invested * 60;
     c.t.hp = c.t.maxHp;
   }
 }
