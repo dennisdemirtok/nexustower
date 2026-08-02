@@ -71,6 +71,16 @@ export const spriteFor = {
   creepDirs: key => sprite(`creep-${(CREEPS[key] && CREEPS[key].sprite) || key}-dirs`),
 };
 
+/* Adressen till en sprite som redan är laddad. Gränssnittet är HTML och
+   kan inte rita ur en canvas-bild, men det ska visa exakt samma figur som
+   brädet — annars står det en abstrakt symbol på köpknappen och en helt
+   annan varelse på banan. Returnerar null tills bilden finns, då faller
+   anroparen tillbaka på sin egen ritning. */
+export function spriteUrl(name) {
+  const img = sprite(name);
+  return img ? img.src : null;
+}
+
 export const DIRS = 8;
 
 /* Ritar rätt ruta ur riktningsarket. Vinkeln är i skärmkoordinater, alltså

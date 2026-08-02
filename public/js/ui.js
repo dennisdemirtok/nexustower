@@ -5,6 +5,7 @@ import {
   RESEARCH, researchCost, requiredResearch, BRANCH_KEYS, creepUnlocked, DIFFS,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
+import { spriteUrl } from './assets.js';
 import * as Audio from './audio.js';
 
 export const $ = id => document.getElementById(id);
@@ -53,9 +54,24 @@ export function initUI(handlers) {
 export function setState(g) { G = g; }
 
 /* ============ HUD ============ */
+let sistaLiv = null;
+
 export function updateHUD() {
   if (!G) return;
-  $('pLives').textContent = Math.max(0, G.me.board.lives);
+  /* Livräknaren var samma storlek och färg som guld och inkomst, mitt i en
+     rad siffror — man såg helt enkelt inte att man höll på att förlora.
+     Nu är den störst, har en mätare under sig och blinkar när den sjunker. */
+  const liv = Math.max(0, G.me.board.lives);
+  $('pLives').textContent = liv;
+  const bar = $('livesBar');
+  if (bar) bar.style.width = Math.max(0, Math.min(1, liv / ECON.lives)) * 100 + '%';
+  if (sistaLiv !== null && liv < sistaLiv) {
+    const box = $('livesBox');
+    box.classList.remove('hit');
+    void box.offsetWidth;          // tvingar om animationen vid täta träffar
+    box.classList.add('hit');
+  }
+  sistaLiv = liv;
   $('eLives').textContent = Math.max(0, G.foe.board.lives);
   $('gold').textContent = Math.floor(G.me.gold);
   $('inc').textContent = Math.round(G.me.income);
@@ -123,6 +139,11 @@ function effRow(type, lv, branch) {
 
 function creepIcon(key, s = 20) {
   const d = CREEPS[key], c = d.color, h = s / 2;
+  /* Samma bild som creepen har på brädet. Knappen visade tidigare en
+     abstrakt form medan banan visade en målad figur, så man kunde inte
+     koppla ihop det man tryckte på med det som kom fram. */
+  const url = spriteUrl(`creep-${d.sprite || key}`);
+  if (url) return `<img class="cico" src="${url}" alt="" width="${s + 8}" height="${s + 8}">`;
   let inner;
   if (d.shape === 'dart') inner = `<polygon points="${s * .85},${h} ${s * .18},${s * .85} ${s * .35},${h} ${s * .18},${s * .15}" fill="${c}"/>`;
   else if (d.shape === 'tank') inner = `<rect x="${s * .12}" y="${s * .24}" width="${s * .76}" height="${s * .52}" rx="${s * .18}" fill="${c}"/>`;
@@ -224,7 +245,7 @@ export function refreshSendbar() {
          ${creepIcon(key)}<div class="nm">${d.nm}</div><div class="lockmsg">🔒${d.unlockMin} min</div>`
       : `<div class="cls" style="color:${ARMOR[d.cls].color}">${ARMOR[d.cls].glyph}</div>
          ${creepIcon(key)}${nameTag(d)}
-         <div class="pr">◆${d.cost}</div><div class="in">+${Math.round(creepIncome(key))} ink</div>${pips}
+         <div class="pr">◆${d.cost}</div><div class="in">+${Math.round(creepIncome(key))} ink/15s</div>${pips}
          <div class="cdfill"></div><div class="qbadge" style="display:none"></div>`;
     el.classList.toggle('locked', locked);
   }
@@ -236,6 +257,15 @@ export function refreshSendbarState() {
   if (!G) return;
   for (const el of document.querySelectorAll('.sendbtn')) {
     const key = el.dataset.key, d = CREEPS[key];
+    /* Bilderna laddas asynkront, så första gången kortet byggs finns ingen
+       adress ännu och den ritade symbolen används. Så fort bilden är inne
+       byts den in — annars satt platshållaren kvar hela matchen. Sker före
+       låskontrollen, så även låsta kort visar rätt figur. */
+    const gammal = el.querySelector('svg');
+    if (gammal) {
+      const url = spriteUrl(`creep-${d.sprite || key}`);
+      if (url) gammal.outerHTML = `<img class="cico" src="${url}" alt="" width="28" height="28">`;
+    }
     if (!creepUnlocked(key, G.time)) continue;
     el.classList.toggle('poor', G.me.gold < d.cost);
     const q = G.me.queue.filter(x => x.key === key).length;
