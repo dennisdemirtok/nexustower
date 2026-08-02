@@ -56,7 +56,7 @@ function newMatch({ mode, mapIndex, foeName }) {
   UI.updateHUD();
   document.getElementById('sector').textContent =
     mode === 'campaign' ? `SEKTOR ${mapIndex + 1} · ${M.name}` : `ONLINE · ${M.name}`;
-  document.getElementById('speedBtn').style.display = mode === 'campaign' ? '' : 'none';
+
   UI.banner(mode === 'campaign' ? `SEKTOR ${mapIndex + 1}` : 'MATCH', `${M.name} · ${G.foe.name}`);
   snapT = 0;
   R.resize();
@@ -329,24 +329,18 @@ function setView(v) {
   UI.closeSheets();
 }
 
+/* Paus och hastighet har ingen knapp längre. Funktionerna finns kvar för
+   testharnessen och för att spelet pausar av sig självt när fliken göms —
+   men spelet har ett tempo, och en pausknapp mitt i tummens väg blev mest
+   tryckt av misstag. */
 function togglePause() {
-  if (!G || G.over) return;
-  if (G.mode === 'online') { UI.toast('Går inte att pausa online'); return; }
+  if (!G || G.over || G.mode === 'online') return;
   G.paused = !G.paused;
-  const b = document.getElementById('pauseBtn');
-  b.textContent = G.paused ? '▶' : '❚❚';
-  b.classList.toggle('active', G.paused);
   if (G.paused) { UI.banner('PAUSAT', ''); Audio.stopMusic(); }
   else Audio.startMusic();
 }
 
-function cycleSpeed() {
-  if (!G || G.mode === 'online') return;
-  G.speed = G.speed === 1 ? 2 : G.speed === 2 ? 3 : 1;
-  const b = document.getElementById('speedBtn');
-  b.textContent = G.speed + '×';
-  b.classList.toggle('active', G.speed > 1);
-}
+function cycleSpeed() {}
 
 /* ============================================================
    Slut på match

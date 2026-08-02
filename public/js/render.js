@@ -186,7 +186,7 @@ function drawSlotLabel(s, text, color, board) {
 /* Dekorbandet runt fältet. Positionerna räknas ur banans egen form, så de
    ligger likadant varje match men olika mellan banor. Inget här påverkar
    spelet — det finns bara för att fältet ska läsa som en plats. */
-const PROPS = ['stump', 'plant', 'crystal', 'rock-2', 'rock-3', 'totem'];
+const PROPS = ['stump', 'plant', 'crystal', 'rock-2', 'rock-3', 'totem', 'bush', 'banner', 'bush'];
 
 function drawSurround(b, s, hostile, time) {
   const { cell, ox, oy } = s;
@@ -472,6 +472,18 @@ function drawPath(b, s, hostile, time) {
     CX.restore();
   }
 
+  /* Portarna. In- och utgången är brädets två viktigaste punkter och
+     markerades tidigare bara med en ring på marken. Valvet ger dem höjd
+     och gör att man ser var vägen börjar och slutar utan att leta. Ritas
+     före ringen så ringen ligger kvar ovanpå som pulserande markering. */
+  const arch = spriteFor.prop('arch');
+  if (arch) {
+    for (const [cx0, cy0] of [b.entry, b.exit]) {
+      const px = gx(s, cx0), py = gy(s, cy0);
+      dropShadow(CX, CX, px, py + cell * 0.38, cell * 0.46, cell * 0.16);
+      drawSprite(CX, arch, px, py - cell * 0.10, cell * 1.35);
+    }
+  }
   portal(gx(s, b.entry[0]), gy(s, b.entry[1]), hostile ? '#ff5d73' : '#ffb454', cell, time, false);
   portal(gx(s, b.exit[0]), gy(s, b.exit[1]), hostile ? '#4fd8eb' : '#ff5d73', cell, time, true);
 }

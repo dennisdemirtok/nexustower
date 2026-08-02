@@ -17,9 +17,12 @@ export function initUI(handlers) {
 
   $('tabDef').addEventListener('click', () => H.setView('def'));
   $('tabAtk').addEventListener('click', () => H.setView('atk'));
-  $('viewBtn').addEventListener('click', () => H.setView(G && G.view === 'def' ? 'atk' : 'def'));
-  $('pauseBtn').addEventListener('click', () => H.togglePause());
-  $('speedBtn').addEventListener('click', () => H.cycleSpeed());
+  /* Vyväxlingen hade två kontroller för samma sak: flikar högst upp och en
+     VÄXLA VY-knapp längst ner. Nu finns bara paret i bottenraden, där
+     tummen ändå är. Paus och hastighet är borta — spelet har ett tempo,
+     och en pausknapp mitt i tummens väg blir mest tryckt av misstag. */
+  $('tabDef').addEventListener('click', () => H.setView('def'));
+  $('tabAtk').addEventListener('click', () => H.setView('atk'));
   $('armoryBtn').addEventListener('click', () => openArmory());
   $('researchBtn').addEventListener('click', () => openResearch());
   $('infoBtn').addEventListener('click', () => openInfo());
@@ -118,7 +121,8 @@ export function banner(title, sub) {
 export function setViewTabs(v) {
   $('tabDef').classList.toggle('active', v === 'def');
   $('tabAtk').classList.toggle('active', v === 'atk');
-  $('viewBtn').textContent = v === 'def' ? 'VÄXLA VY ⚔' : 'VÄXLA VY 🛡';
+  $('tabDef').classList.toggle('active', v === 'def');
+  $('tabAtk').classList.toggle('active', v === 'atk');
   $(v === 'def' ? 'dotDef' : 'dotAtk').classList.remove('on');
 }
 export function alertTab(which) {

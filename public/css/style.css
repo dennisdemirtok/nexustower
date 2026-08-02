@@ -190,6 +190,22 @@ canvas{position:absolute;inset:0;touch-action:none;display:block}
   .sendbtn .pr{font-size:10px}
 }
 
+/* Vyparet: två smala knappar i stället för flikraden högst upp plus en
+   VÄXLA VY-knapp. Samma funktion på en fjärdedel av ytan. */
+.viewpair{display:flex;gap:3px;flex:0 0 auto}
+.btn.vw{
+  min-width:44px;padding:9px 6px;display:flex;align-items:center;gap:4px;
+  position:relative;font-size:14px;
+}
+.btn.vw .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;display:inline}
+.btn.vw.active{border-color:var(--cy);color:var(--cy);background:rgba(0,242,255,.10)}
+.btn.vw .dot{
+  position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;
+  background:var(--coral);opacity:0;transition:opacity .2s;
+}
+.btn.vw .dot.on{opacity:1}
+.btn.wide{flex:1 1 0}
+
 /* ============ kontrollrad ============ */
 #controls{
   display:flex;gap:7px;padding:8px 10px calc(env(safe-area-inset-bottom,0px) + 10px);
@@ -214,7 +230,9 @@ canvas{position:absolute;inset:0;touch-action:none;display:block}
 .btn.upgrade{background:rgba(0,242,255,.06);border-color:var(--cy);color:var(--cy)}
 .btn.sell{background:rgba(255,107,74,.06);border-color:var(--coral);color:var(--coral)}
 .btn .ico{font-size:14px}
-@media(max-width:520px){.btn .lbl{display:none}}
+/* Etiketterna får plats nu när paus, tempo och VÄXLA VY är borta. Bara de
+   allra smalaste skärmarna faller tillbaka på enbart ikon. */
+@media(max-width:360px){.btn.wide .lbl{display:none}}
 
 /* ============ bottensheets ============ */
 #sheetScrim{
