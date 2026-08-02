@@ -255,7 +255,7 @@ function build(key) {
   G.me.gold -= cost;
   b.towers.push({
     type: key, cx: G.sel.cx, cy: G.sel.cy, lv: 0, branch: null,
-    cd: 0, recoil: 0, invested: cost, angle: -1.57, flash: 0,
+    cd: 0, recoil: 0, invested: cost, angle: -1.57, flash: 0, hp: cost * 12, maxHp: cost * 12,
   });
   rebuildSolid(b);
   Audio.sfx.build();
@@ -303,6 +303,9 @@ function upgradeTower(tw, branch) {
   tw.lv++;
   if (useBranch) tw.branch = useBranch;
   tw.invested += nxt.cost;
+  // Livet följer investeringen, så ett uppgraderat torn tål mer belägring.
+  tw.maxHp = tw.invested * 12;
+  tw.hp = tw.maxHp;
   const face = towerFace(tw.type, tw.lv, tw.branch);
   addFx(G.me.board, 'ring', tw.cx, tw.cy, face.color, 1.4);
   addParts(G.me.board, tw.cx, tw.cy, branch ? 18 : 8, face.color, branch ? 3.5 : 2);
@@ -513,7 +516,7 @@ function tryBuildAt(cx, cy, quiet) {
   G.me.gold -= cost;
   b.towers.push({
     type: 'wall', cx, cy, lv: 0, branch: null,
-    cd: 0, recoil: 0, invested: cost, angle: -1.57, flash: 0,
+    cd: 0, recoil: 0, invested: cost, angle: -1.57, flash: 0, hp: cost * 12, maxHp: cost * 12,
   });
   rebuildSolid(b);
   addFx(b, 'ring', cx, cy, TOWERS.wall.color, 0.9);

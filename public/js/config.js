@@ -426,6 +426,30 @@ export const CREEPS = {
     note: 'FLYG · tar bara halv skada av splash',
   },
 
+  /* Belägrare. De skjuter på tornen i stället för att bara gå förbi dem, och
+     är det enda i spelet som kan riva något du byggt. Poängen är dynamik:
+     mot dem hjälper det inte att stapla mer eldkraft på samma ställe, för
+     just den stapeln är det de siktar på. Två steg — ett tidigt som svider
+     och ett sent som river på allvar. */
+  bandit: {
+    nm: 'BANDIT', shape: 'dart', color: '#e0a03d', cls: 'latt', sprite: 'bandit',
+    hp: 900, spd: 1.25, r: 0.30, cost: 350, leak: 1, unlockMin: 3,
+    siege: 55, siegeRange: 1.6,
+    note: 'Skjuter på tornen den passerar — flytta inte allt till en rad',
+  },
+  krossare: {
+    nm: 'KROSSARE', shape: 'boss', color: '#c94f2e', cls: 'pans', sprite: 'krossare',
+    hp: 26000, spd: 0.75, r: 0.48, cost: 7000, leak: 6, unlockMin: 13,
+    siege: 900, siegeRange: 2.0,
+    note: 'River torn. Det enda som tvingar fram ombyggnad mitt i matchen',
+  },
+  svarm: {
+    nm: 'SVÄRMMODER', shape: 'boss', color: '#8ee06a', cls: 'tung', sprite: 'svarm',
+    hp: 42000, spd: 0.85, r: 0.50, cost: 11000, leak: 6, unlockMin: 16,
+    deathSpawn: { key: 'ghoul', count: 6 },
+    note: 'Föder sex ghouls när den dör — döda den långt från din nexus',
+  },
+
   // ---- Boss, 16 minuter ----
   behemoth: {
     nm: 'BEHEMOTH', shape: 'boss', color: '#ff3b5c', cls: 'pans', sprite: 'boss',

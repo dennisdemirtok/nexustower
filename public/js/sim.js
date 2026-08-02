@@ -1,5 +1,5 @@
 import { CREEPS, ECON, sendHpMul, towerStat, towerFace, dmgMul, creepBounty, tierHpMul } from './config.js';
-import { cPos, nextStep, progress, distAt } from './board.js';
+import { rebuildSolid, cPos, nextStep, progress, distAt } from './board.js';
 import { COLS, ROWS } from './config.js';
 
 const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
@@ -242,6 +242,39 @@ function stepCreeps(b, dt, hooks) {
       if (c.dead) continue;
     }
     if (c.regen && c.hp < c.maxHp) c.hp = Math.min(c.maxHp, c.hp + c.regen * dt);
+
+    /* Belägring. Creepen fortsätter gå men skjuter samtidigt på närmaste
+       torn inom räckhåll. Det är den enda kraft i spelet som river något du
+       byggt, och den bryter mönstret att allt försvar kan staplas på ett
+       ställe — just den stapeln är det belägraren siktar på.
+       Tornet tas bort när livet är slut och flödesfältet räknas om, så
+       labyrinten öppnar sig av sig själv. */
+    const d0 = CREEPS[c.type];
+    if (d0.siege) {
+      let mal = null, bast = d0.siegeRange * d0.siegeRange;
+      for (const tw of b.towers) {
+        const dx = tw.cx - c.x, dy = tw.cy - c.y;
+        const q = dx * dx + dy * dy;
+        if (q < bast) { bast = q; mal = tw; }
+      }
+      if (mal) {
+        mal.hp -= d0.siege * dt;
+        c.siegeFx = (c.siegeFx || 0) - dt;
+        if (c.siegeFx <= 0) {
+          c.siegeFx = 0.28;
+          const p = cPos(b, c);
+          addFx(b, 'ring', p.x, p.y, d0.color, 0.5);
+        }
+        if (mal.hp <= 0) {
+          b.towers = b.towers.filter(t => t !== mal);
+          addFx(b, 'boom', mal.cx, mal.cy, '#ff8a3d', 1.3);
+          addParts(b, mal.cx, mal.cy, 18, '#c9a06a', 4.5, 0.8);
+          b.shake = 1;
+          rebuildSolid(b);
+          if (hooks.onTowerLost) hooks.onTowerLost(mal);
+        }
+      }
+    }
     /* Stegtakten drivs av tillryggalagd sträcka, inte av klockan. En snabb
        varg tar därför fler steg än en trög golem i stället för att båda
        vicka lika fort — det var det som fick dem att se ut att glida i
