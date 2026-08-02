@@ -97,8 +97,12 @@ export function canBuild(b, x, y) {
   if (b.solid.has(key)) return { ok: false, why: 'Upptaget' };
   if (x === b.entry[0] && y === b.entry[1]) return { ok: false, why: 'Ingången' };
   if (x === b.exit[0] && y === b.exit[1]) return { ok: false, why: 'Utgången' };
-  // Ingen creep får stå i rutan.
+  /* Ingen levande creep får stå i rutan. Döende räknas inte: de ligger kvar
+     en kvarts sekund för dödsanimationens skull och är helt inerta under
+     tiden. Att de blockerade bygget gjorde att man fick trycka flera gånger
+     på samma ruta innan det tog — precis efter att man dödat något där. */
   for (const c of b.creeps) {
+    if (c.dead) continue;
     if (!c.fly && Math.floor(c.x) === x && Math.floor(c.y) === y) {
       return { ok: false, why: 'En creep står där' };
     }
@@ -106,8 +110,12 @@ export function canBuild(b, x, y) {
   // Provbygg och kolla att både ingången och varje creep fortfarande har väg ut.
   b.solid.add(key);
   const ok = computeField(b);
+  /* Samma sak här: en döende creep kan stå på en ruta som blir oåtkomlig,
+     och då avvisades bygget med "du får inte stänga vägen helt" trots att
+     vägen var öppen. Det var den irriterande sortens fel — spelet sa nej av
+     en anledning som inte syntes på skärmen. */
   const stranded = ok && b.creeps.some(c =>
-    !c.fly && distAt(b, Math.floor(c.x), Math.floor(c.y)) >= INF);
+    !c.dead && !c.fly && distAt(b, Math.floor(c.x), Math.floor(c.y)) >= INF);
   b.solid.delete(key);
   computeField(b);
   if (!ok || stranded) return { ok: false, why: 'Du får inte stänga vägen helt' };

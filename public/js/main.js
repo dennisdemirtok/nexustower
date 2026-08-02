@@ -380,8 +380,17 @@ function snapshot() {
   const b = G.me.board;
   return {
     l: b.lives,
+    // Motståndarens inkomst fanns aldrig med i snapshoten, så siffran i
+    // HUD:en stod still hela matchen online. Kapplöpningen i ekonomi är
+    // hela spelet — den måste synas.
+    i: Math.round(G.me.income),
     tw: b.towers.map(t => [TOWER_KEYS.indexOf(t.type), t.cx, t.cy, t.lv, t.branch === 'b' ? 1 : 0]),
-    cr: b.creeps.filter(c => c.t >= 0).map(c => [
+    /* Döende creeps hör inte hemma i snapshoten. De ligger kvar lokalt för
+       dödsanimationen, men skickade vi dem växte meddelandet i takt med hur
+       mycket som dödades — och när det blev stort nog kom det inte fram
+       alls, vilket är varför motståndarens creeps försvann mitt i ett
+       anfall. Taket är en sista säkring. */
+    cr: b.creeps.filter(c => c.t >= 0 && !c.dead).slice(0, 120).map(c => [
       c.id, CREEP_KEYS.indexOf(c.type), +c.x.toFixed(2), +c.y.toFixed(2),
       +(c.hp / c.maxHp).toFixed(2), c.lv, c.slow > 0 ? 1 : 0, +c.t.toFixed(2),
     ]),
@@ -392,6 +401,7 @@ function applySnapshot(s) {
   if (!G || G.mode !== 'online') return;
   const b = G.foe.board;
   b.lives = s.l;
+  if (s.i !== undefined) G.foe.income = s.i;
   b.towers = s.tw.map(a => ({
     type: TOWER_KEYS[a[0]], cx: a[1], cy: a[2], lv: a[3],
     branch: a[3] >= BASE_LEVELS ? (a[4] ? 'b' : 'a') : null,
