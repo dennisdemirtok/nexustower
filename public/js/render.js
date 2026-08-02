@@ -220,10 +220,6 @@ function drawGrid(b, s, G) {
      vansinne att rita om varje bildruta. */
   const W = COLS * cell, H = ROWS * cell;
   const hostile = !G;
-  /* Marken dämpas permanent så torn och creeps får kontrast mot den.
-     Filtret läggs bara på bakgrunden — allt som ritas efteråt behåller
-     full mättnad och poppar direkt. */
-  CX.filter = 'brightness(0.8) saturate(0.6)';
   const groundImg = spriteFor.terrain();
   if (groundImg) {
     // Bilden kaklas över fältet så en 1024-ruta räcker till hela banan.
@@ -232,17 +228,20 @@ function drawGrid(b, s, G) {
     CX.translate(ox, oy);
     CX.fillStyle = pat;
     CX.fillRect(0, 0, W, H);
-    if (hostile) { CX.globalCompositeOperation = 'multiply'; CX.fillStyle = 'rgba(190,120,190,.55)'; CX.fillRect(0, 0, W, H); }
+    if (hostile) { CX.globalCompositeOperation = 'screen'; CX.fillStyle = 'rgba(58,6,40,.38)'; CX.fillRect(0, 0, W, H);
+      CX.globalCompositeOperation = 'multiply'; CX.fillStyle = 'rgba(150,120,160,.35)'; CX.fillRect(0, 0, W, H); }
     CX.restore();
   } else {
     CX.drawImage(terrainFor(b, cell, b.entry[0] * 31 + b.exit[1] * 7 + b.rock.size, hostile), ox, oy, W, H);
   }
-  CX.filter = 'none';
-  CX.strokeStyle = hostile ? 'rgba(255,120,150,.35)' : 'rgba(255,210,150,.35)';
+  /* Ramen och rutnätet ligger i gränssnittets egna färger. Tidigare var de
+     varmvita mot varm mark och försvann; mot den mörka marken blir cyanen
+     den enda ljusa linjen på fältet och därmed lätt att följa. */
+  CX.strokeStyle = hostile ? 'rgba(255,93,115,.5)' : 'rgba(0,242,255,.42)';
   CX.lineWidth = 2;
   CX.strokeRect(ox, oy, W, H);
 
-  CX.strokeStyle = 'rgba(255,255,255,.05)';
+  CX.strokeStyle = hostile ? 'rgba(255,93,115,.07)' : 'rgba(0,242,255,.075)';
   CX.lineWidth = 1;
   CX.beginPath();
   for (let x = 0; x <= COLS; x++) { CX.moveTo(ox + x * cell, oy); CX.lineTo(ox + x * cell, oy + ROWS * cell); }
@@ -288,7 +287,7 @@ function drawGrid(b, s, G) {
         roundRect(ox + x * cell + p, oy + y * cell + p, cell - 2 * p, cell - 2 * p, cell * 0.16);
         CX.fill();
       }
-      CX.fillStyle = hi ? 'rgba(160,190,255,.3)' : 'rgba(120,135,200,.16)';
+      CX.fillStyle = hi ? 'rgba(0,242,255,.34)' : 'rgba(120,190,220,.15)';
       CX.beginPath(); CX.arc(gx(s, x), gy(s, y), cell * 0.04, 0, 7); CX.fill();
     }
   }
@@ -475,16 +474,23 @@ function drawTower(tw, s, hostile, time) {
   const maxed = tw.lv >= 5;
   const tier = Math.min(2, Math.floor(tw.lv / 2));      // 0 trä, 1 sten, 2 element
 
+  /* Ett par pixlars vaggning, ur fas från granntornet. Ensamt är det
+     knappt märkbart; över ett helt fält är det skillnaden mellan en rad
+     klistermärken och något som står där och andas. */
+  const fas = tw.cx * 2.7 + tw.cy * 1.3;
+  const idle = Math.sin(time * 1.7 + fas) * size * 0.015;
+
   dropShadow(CX, CX, x, y + size * 0.34, size * 0.44, size * 0.19);
 
   const img = spriteFor.tower(tw.type, tw.lv, tw.branch);
   if (img) {
     CX.save();
-    CX.translate(x, y);
+    CX.translate(x, y + idle);
     CX.rotate(tw.angle + Math.PI / 2);
     CX.translate(0, (tw.recoil || 0) * size * 0.1);
     drawSprite(CX, img, 0, 0, size * 1.18);
     CX.restore();
+    muzzle(tw, x, y + idle, size, face.color);
     if (tw.flash > 0.35) {
       CX.globalCompositeOperation = 'lighter';
       CX.globalAlpha = tw.flash * 0.5;
@@ -596,6 +602,36 @@ function drawTower(tw, s, hostile, time) {
     CX.globalAlpha = 1;
     CX.globalCompositeOperation = 'source-over';
   }
+  muzzle(tw, x, y, size, face.color);
+}
+
+/* Mynningsblixt. Ritas i pjäsens riktning i stället för som en ring runt
+   tornet — då ser man vilket torn som sköt och åt vilket håll, vilket var
+   omöjligt att avläsa när tio torn blinkade likadant samtidigt. */
+function muzzle(tw, x, y, size, color) {
+  const f = tw.flash || 0;
+  if (f <= 0.55) return;
+  const a = f * 2.2 - 1.2;
+  const d = size * 0.44, w = size * (0.10 + 0.09 * f);
+  CX.save();
+  CX.translate(x, y);
+  CX.rotate(tw.angle);
+  CX.globalCompositeOperation = 'lighter';
+  CX.globalAlpha = a;
+  CX.fillStyle = color;
+  CX.beginPath();
+  CX.moveTo(d, 0);
+  CX.lineTo(d - size * 0.2, -w);
+  CX.lineTo(d + size * 0.26, 0);
+  CX.lineTo(d - size * 0.2, w);
+  CX.closePath();
+  CX.fill();
+  CX.fillStyle = '#fff';
+  CX.globalAlpha = a * 0.8;
+  CX.beginPath(); CX.arc(d, 0, w * 0.55, 0, 7); CX.fill();
+  CX.restore();
+  CX.globalAlpha = 1;
+  CX.globalCompositeOperation = 'source-over';
 }
 
 function shapePath(shape, hg) {
@@ -679,23 +715,34 @@ function drawCreep(c, s, time) {
   const y = c._sy - alt;
   const wob = c.fly ? 0 : Math.sin(c.wob) * r * 0.12;
 
+  /* Dödsklappen: kroppen plattas ihop mot marken och tonar ut på ett
+     kvarts sekund. Fram till nu togs creepen bort på samma bildruta som
+     den dog, så det enda man såg var att den försvann. */
+  const dieT = c.dead ? 1 - Math.max(0, c.die) / 0.26 : 0;
+  const sqX = c.dead ? 1 + dieT * 0.45 : 1;
+  const sqY = c.dead ? 1 - dieT * 0.62 : 1;
+  if (c.dead) { CX.save(); CX.globalAlpha = 1 - dieT * dieT; }
+
   // Alla creeps får markskugga; flygande får en tydligare och lägre.
   dropShadow(CX, CX, x, c._sy + (c.fly ? cell * 0.08 : r * 0.55),
-             r * (c.fly ? 0.8 : 0.95), r * (c.fly ? 0.32 : 0.4));
+             r * (c.fly ? 0.8 : 0.95) * sqX, r * (c.fly ? 0.32 : 0.4));
 
   const cimg = spriteFor.creep(c.type);
   if (cimg) {
     CX.save();
-    CX.translate(x, y + wob);
+    CX.translate(x, y + wob + (c.dead ? r * dieT * 0.5 : 0));
+    CX.scale(sqX, sqY);
     if (c.flash > 0) { CX.filter = 'brightness(2.4)'; }
     drawSprite(CX, cimg, 0, 0, r * 2.4);
     CX.restore();
-    drawCreepBars(c, s, x, y, r, cell);
+    if (!c.dead) drawCreepBars(c, s, x, y, r, cell);
+    if (c.dead) CX.restore();
     return;
   }
 
   CX.save();
-  CX.translate(x, y + wob);
+  CX.translate(x, y + wob + (c.dead ? r * dieT * 0.5 : 0));
+  CX.scale(sqX, sqY);
 
   if (c.slow > 0) {
     CX.beginPath(); CX.arc(0, 0, r + 3.5, 0, 7);

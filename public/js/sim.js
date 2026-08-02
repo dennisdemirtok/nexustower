@@ -58,6 +58,7 @@ export function damage(b, c, amount, st, hooks) {
   c.flash = 1;
   if (c.hp <= 0) {
     c.dead = true;
+    c.die = 0.26;              // ligger kvar och plattas ihop innan den tas bort
     const p = cPos(b, c);
     addFx(b, 'boom', p.x, p.y, CREEPS[c.type].color, 0.55 + c.r);
     addParts(b, p.x, p.y, c.r > 0.3 ? 12 : 7, CREEPS[c.type].color, 2.6 + c.r * 3);
@@ -282,7 +283,13 @@ function stepCreeps(b, dt, hooks) {
       addParts(b, p.x, p.y, 16, '#ff5d73', 4, 0.7);
     }
   }
-  b.creeps = b.creeps.filter(c => !c.dead);
+  /* Döende creeps ligger kvar ett ögonblick så de hinner platta ihop sig
+     och tona ut. Utan det försvann de på en enda bildruta och man såg
+     aldrig att man dödade något — brädet bara blev tomt. De är helt inerta
+     under tiden: all logik hoppar redan över c.dead. Läckta creeps har
+     ingen die-timer och plockas bort direkt, de gick in i nexus. */
+  for (const c of b.creeps) if (c.dead && c.die > 0) c.die -= dt;
+  b.creeps = b.creeps.filter(c => !c.dead || c.die > 0);
   if (leaked > 0 && hooks.onLeak) hooks.onLeak(leaked);
 }
 
