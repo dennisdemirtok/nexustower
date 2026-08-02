@@ -5,3 +5,7 @@ npm-debug.log*
 .DS_Store
 dist/
 *.local
+
+# Dev-verktyg för att rendera 3D-modeller till sprites. Ligger under
+# public/ bara för att dev-servern ska nå det — ska aldrig till Railway.
+public/_dev/

@@ -12,6 +12,18 @@ import { CREEPS } from './config.js';
 const cache = new Map();
 let enabled = true;
 
+/* Bilduppsättning. 'malad' är de handmålade sprites vi kört hittills,
+   '3d' är samma motiv renderade från Tripo-modeller. Sätts med ?art=3d i
+   adressfältet så vi kan växla mellan dem i samma match och faktiskt se
+   skillnaden i stället för att jämföra minnesbilder. Saknas en fil i
+   3d-uppsättningen faller den tillbaka på den målade. */
+let set = 'malad';
+try {
+  const q = new URLSearchParams(location.search).get('art');
+  if (q === '3d' || q === 'malad') set = q;
+} catch { /* körs även utan DOM i testharnessen */ }
+export const artSet = () => set;
+
 /* Hämtar en sprite. Returnerar null tills bilden är laddad, och för
    alltid null om den inte finns — anroparen ritar då sin egen version. */
 export function sprite(name) {
@@ -26,13 +38,15 @@ export function sprite(name) {
   const img = new Image();
   img.decoding = 'async';
   img._ok = false;
-  let triedSvg = false;
+  // Ordningen att prova: vald uppsättning, sedan målad PNG, sedan SVG.
+  const kandidater = (set === '3d' ? [`3d/${name}.png`] : []).concat([`${name}.png`, `${name}.svg`]);
+  let i = 0;
   img.onload = () => { img._ok = true; };
   img.onerror = () => {
-    if (!triedSvg) { triedSvg = true; img.src = `/assets/${name}.svg`; return; }
+    if (++i < kandidater.length) { img.src = `/assets/${kandidater[i]}`; return; }
     cache.set(name, null);
   };
-  img.src = `/assets/${name}.png`;
+  img.src = `/assets/${kandidater[0]}`;
   cache.set(name, img);
   return null;
 }

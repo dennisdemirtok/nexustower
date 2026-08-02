@@ -20,6 +20,25 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 }));
 app.get('/health', (_req, res) => res.json({ ok: true, players: clients.size, rooms: rooms.size }));
 
+/* Dev-verktyget under public/_dev renderar GLB-modeller till sprites i
+   webbläsaren och behöver kunna lägga resultatet på disk. Rutten finns
+   bara lokalt — i produktion existerar den inte alls, och sökvägen tvingas
+   ner i public/assets så den aldrig kan skriva utanför. */
+if (!isProd) {
+  app.post('/_dev/save', express.json({ limit: '40mb' }), async (req, res) => {
+    const { name, dataUrl } = req.body || {};
+    if (!/^[a-z0-9/_-]+\.png$/i.test(name || '')) return res.status(400).json({ error: 'ogiltigt namn' });
+    const dest = path.resolve(__dirname, '..', 'public', 'assets', name);
+    const root = path.resolve(__dirname, '..', 'public', 'assets');
+    if (!dest.startsWith(root + path.sep)) return res.status(400).json({ error: 'utanför assets' });
+    const buf = Buffer.from(String(dataUrl).split(',')[1] || '', 'base64');
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(path.dirname(dest), { recursive: true });
+    await writeFile(dest, buf);
+    res.json({ ok: true, bytes: buf.length });
+  });
+}
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 

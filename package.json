@@ -16,5 +16,8 @@
     "ws": "^8.18.0"
   },
   "license": "MIT",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "three": "^0.170.0"
+  }
 }
