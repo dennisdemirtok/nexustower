@@ -187,6 +187,7 @@ function drawBoard(G, b, s, hostile, ctx) {
   drawGrid(b, s, hostile ? null : ctx);
   drawPath(b, s, hostile, ctx.time);
 
+  if (!hostile) drawBuildOverlay(G, b, s);
   if (!hostile && G.sel) drawSelection(G, b, s);
 
   for (const tw of b.towers) drawTower(tw, s, hostile, ctx.time);
@@ -201,6 +202,8 @@ function drawBoard(G, b, s, hostile, ctx) {
   for (const f of b.fx) drawFx(f, s);
   CX.globalCompositeOperation = 'source-over';
   for (const f of b.floats) drawFloat(f, s);
+
+  if (!hostile) drawBuildCursor(G, b, s);
 
   if (b.hurt > 0) {
     CX.fillStyle = `rgba(255,60,90,${b.hurt * 0.18})`;
@@ -217,6 +220,10 @@ function drawGrid(b, s, G) {
      vansinne att rita om varje bildruta. */
   const W = COLS * cell, H = ROWS * cell;
   const hostile = !G;
+  /* Marken dämpas permanent så torn och creeps får kontrast mot den.
+     Filtret läggs bara på bakgrunden — allt som ritas efteråt behåller
+     full mättnad och poppar direkt. */
+  CX.filter = 'brightness(0.8) saturate(0.6)';
   const groundImg = spriteFor.terrain();
   if (groundImg) {
     // Bilden kaklas över fältet så en 1024-ruta räcker till hela banan.
@@ -230,6 +237,7 @@ function drawGrid(b, s, G) {
   } else {
     CX.drawImage(terrainFor(b, cell, b.entry[0] * 31 + b.exit[1] * 7 + b.rock.size, hostile), ox, oy, W, H);
   }
+  CX.filter = 'none';
   CX.strokeStyle = hostile ? 'rgba(255,120,150,.35)' : 'rgba(255,210,150,.35)';
   CX.lineWidth = 2;
   CX.strokeRect(ox, oy, W, H);
@@ -293,6 +301,9 @@ function drawPath(b, s, hostile, time) {
   const rgb = hostile ? '255,93,115' : '255,180,84';
   const route = routeCells(b);
 
+  /* Vägen ritas som en upphöjd markväg: ljus kant, mörkare körbana och ett
+     svagt flöde i färdriktningen. En streckad linje räckte inte — man såg
+     inte vad som var väg och vad som var byggbar mark. */
   if (route.length > 1) {
     CX.lineJoin = 'round'; CX.lineCap = 'round';
     const trace = () => {
@@ -300,12 +311,14 @@ function drawPath(b, s, hostile, time) {
       CX.moveTo(gx(s, route[0][0]), gy(s, route[0][1]));
       for (let i = 1; i < route.length; i++) CX.lineTo(gx(s, route[i][0]), gy(s, route[i][1]));
     };
-    trace(); CX.strokeStyle = `rgba(${rgb},.07)`; CX.lineWidth = cell * 0.7; CX.stroke();
-    trace(); CX.strokeStyle = `rgba(${rgb},.22)`; CX.lineWidth = 2.5; CX.stroke();
+    trace(); CX.strokeStyle = `rgba(${rgb},.30)`; CX.lineWidth = cell * 0.80; CX.stroke();  // kantljus
+    trace(); CX.strokeStyle = 'rgba(24,16,10,.55)'; CX.lineWidth = cell * 0.66; CX.stroke(); // körbana
+    trace(); CX.strokeStyle = `rgba(${rgb},.10)`; CX.lineWidth = cell * 0.60; CX.stroke();
+
     trace();
-    CX.strokeStyle = `rgba(${rgb},.75)`;
+    CX.strokeStyle = `rgba(${rgb},.55)`;
     CX.lineWidth = 2;
-    CX.setLineDash([cell * 0.16, cell * 0.42]);
+    CX.setLineDash([cell * 0.14, cell * 0.5]);
     CX.lineDashOffset = -time * cell * 2.2;
     CX.stroke();
     CX.setLineDash([]);
@@ -354,6 +367,76 @@ function portal(x, y, color, cell, time, isCore) {
     CX.globalAlpha = 1; CX.strokeStyle = color; CX.lineWidth = 1.5; CX.stroke();
     CX.restore();
   }
+}
+
+/* Byggläget. Så länge fingret är nere dämpas kartan ytterligare och varje
+   ledig ruta ritas som en platta med cyan kant — då behöver rutnätet aldrig
+   synas i stridsvyn, där det bara är brus. */
+function drawBuildOverlay(G, b, s) {
+  const f = G.buildFade || 0;
+  if (f <= 0.01) return;
+  const { cell, ox, oy } = s;
+
+  CX.fillStyle = `rgba(6,9,16,${0.46 * f})`;
+  CX.fillRect(ox, oy, COLS * cell, ROWS * cell);
+
+  const pad = cell * 0.09, side = cell - pad * 2;
+  CX.lineWidth = 1.2;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (b.solid.has(x + ',' + y)) continue;
+      if (x === b.entry[0] && y === b.entry[1]) continue;
+      if (x === b.exit[0] && y === b.exit[1]) continue;
+      const px = ox + x * cell + pad, py = oy + y * cell + pad;
+      CX.fillStyle = `rgba(0,242,255,${0.08 * f})`;
+      CX.fillRect(px, py, side, side);
+      CX.strokeStyle = `rgba(0,242,255,${0.34 * f})`;
+      CX.strokeRect(px, py, side, side);
+    }
+  }
+}
+
+/* Rutan under fingret: stark fyllning, räckviddscirkel och ett halvgenom-
+   skinligt torn som snappar till rutan. Grön kant när det går att bygga,
+   röd när det inte gör det. */
+function drawBuildCursor(G, b, s) {
+  const h = G.hoverCell;
+  const f = G.buildFade || 0;
+  if (!h || f <= 0.01) return;
+  const { cell, ox, oy } = s;
+  const ok = G.hoverOk !== false;
+  const rgb = ok ? '61,220,151' : '255,80,60';
+  const px = ox + h.cx * cell, py = oy + h.cy * cell;
+
+  if (ok) {
+    const st = towerStat('wall', 0, null);
+    CX.beginPath();
+    CX.arc(gx(s, h.cx), gy(s, h.cy), st.range * cell, 0, 7);
+    CX.fillStyle = `rgba(${rgb},${0.07 * f})`;
+    CX.fill();
+    CX.strokeStyle = `rgba(${rgb},${0.45 * f})`;
+    CX.lineWidth = 1.5;
+    CX.setLineDash([5, 5]);
+    CX.stroke();
+    CX.setLineDash([]);
+  }
+
+  CX.fillStyle = `rgba(${rgb},${0.26 * f})`;
+  CX.fillRect(px, py, cell, cell);
+  CX.strokeStyle = `rgba(${rgb},${0.95 * f})`;
+  CX.lineWidth = 2;
+  CX.strokeRect(px + 1, py + 1, cell - 2, cell - 2);
+
+  // spöktornet
+  const img = spriteFor.tower('wall', 0, null);
+  CX.save();
+  CX.globalAlpha = 0.55 * f;
+  if (img) drawSprite(CX, img, gx(s, h.cx), gy(s, h.cy), cell * 0.95);
+  else {
+    CX.fillStyle = `rgb(${rgb})`;
+    CX.fillRect(px + cell * 0.2, py + cell * 0.2, cell * 0.6, cell * 0.6);
+  }
+  CX.restore();
 }
 
 function drawSelection(G, b, s) {

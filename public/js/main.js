@@ -39,6 +39,7 @@ function newMatch({ mode, mapIndex, foeName }) {
     time: 0, wave: 0, waveT: ECON.waveInterval, incT: ECON.incInterval,
     sendCd: 0, prep: ECON.prepTime, speed: 1, paused: false, over: false,
     view: 'def', sel: null, buildHint: false, previewRange: 0,
+    buildFade: 0, hoverCell: null, hoverOk: true,
     me: makeSide('DU'),
     foe: makeSide(foeName || M.ai.nm),
   };
@@ -133,6 +134,11 @@ function update(dt) {
     onFire: st => Audio.sfx.shoot(st.dmgType),
     onImpact: st => { if (st.splash) Audio.sfx.boom(st.splash); },
   });
+
+  /* Bygglägets overlay tonar in och ut på 150 ms i stället för att blinka. */
+  const target = G.buildHint ? 1 : 0;
+  const step = dt / 0.15;
+  G.buildFade += Math.sign(target - G.buildFade) * Math.min(step, Math.abs(target - G.buildFade));
 
   // Musiken tätnar när det faktiskt brinner på din bana.
   audioT -= dt;
@@ -535,20 +541,33 @@ CV.addEventListener('pointerdown', e => {
   painting = true;
   G.buildHint = true;
   lastPaint = hit;
+  setHover(hit);
   tryBuildAt(hit.cx, hit.cy, false);
 });
+
+/* Markören visar var tornet hamnar och om rutan duger — grönt eller rött
+   innan man släpper, i stället för att man får gissa. */
+function setHover(hit) {
+  if (!hit) { G.hoverCell = null; return; }
+  G.hoverCell = hit;
+  const b = G.me.board;
+  G.hoverOk = !towerAt(b, hit.cx, hit.cy)
+    && G.me.gold >= buildCost('wall', b.towers.length)
+    && canBuild(b, hit.cx, hit.cy).ok;
+}
 
 CV.addEventListener('pointermove', e => {
   if (!painting || !G || G.over) return;
   const hit = cellFromEvent(e);
   if (!hit) return;
+  setHover(hit);
   if (lastPaint && lastPaint.cx === hit.cx && lastPaint.cy === hit.cy) return;
   lastPaint = hit;
   tryBuildAt(hit.cx, hit.cy, true);   // tyst under dragning
 });
 
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
-  CV.addEventListener(ev, () => { painting = false; if (G) G.buildHint = false; });
+  CV.addEventListener(ev, () => { painting = false; if (G) { G.buildHint = false; G.hoverCell = null; } });
 }
 
 window.addEventListener('resize', () => {

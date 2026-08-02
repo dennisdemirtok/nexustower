@@ -21,6 +21,8 @@ export function initAI(side, cfg, board) {
   side.seen = { latt: 0, tung: 0, pans: 0, flyg: 0 };
   side.research = Object.fromEntries(BRANCH_KEYS.map(k => [k, 0]));
   side.mainEl = null;
+  side.reviewT = 20;      // hur ofta elementvalet omprövas
+  side.pressure = 0;      // hur hårt den blivit pressad hittills
 }
 
 function pickBuildOrder(cfg) {
@@ -83,6 +85,11 @@ export function aiThink(G, dt) {
   if (incoming === 0 && hurt < 0.15) defWeight = 0.22;
   defWeight = Math.min(1, defWeight * (0.7 + cfg.iq * 0.5));
 
+  /* Håll reda på hur hårt den pressas. Läckta liv väger tyngst, men även
+     ren volym på banan räknas — annars märker den inget förrän det är för
+     sent. Det är den här siffran som styr hur lång labyrint den bygger. */
+  A.pressure = Math.max(A.pressure, hurt * 3 + Math.min(2, incoming / 4000));
+
   if (G.prep > 0 || Math.random() < defWeight) spendOnDefense(A, G.wave, prof);
   else spendOnOffense(A);
 }
@@ -92,14 +99,14 @@ function spendOnDefense(A, wave, prof) {
   const cfg = A.cfg;
   const wallCost = buildCost('wall', b.towers.length);
 
-  /* 1) Bygg labyrint. Så länge vägen är kortare än måttet är det alltid
-     bättre att förlänga den än att köpa mer eldkraft — creepsen hinner
-     helt enkelt inte bli beskjutna nog. */
-  /* Muren har ett tak. Utan det bygger AI:n palisader i all evighet och
-     kommer aldrig till forskningen — den stod med tjugo trästockar och
-     ingen eldkraft alls. */
+  /* 1) Bygg labyrint. Måttet är inte längre fast: pressas AI:n hårt
+     förlänger den vägen i stället för att bara stå och ta emot. Utan det
+     nådde den sitt mål tidigt och byggde aldrig mer, hur mycket man än
+     skickade. */
+  const target = cfg.mazeTarget + Math.round(A.pressure * 9);
+  const wallCap = 34 + Math.round(A.pressure * 8);
   const walls = b.towers.filter(t => !t.branch).length;
-  if (b.pathLen < cfg.mazeTarget && walls < 34 && A.gold >= wallCost) {
+  if (b.pathLen < target && walls < wallCap && A.gold >= wallCost) {
     const spot = nextPlanSpot(b);
     if (spot && canBuild(b, spot[0], spot[1]).ok) {
       A.gold -= wallCost;
@@ -114,10 +121,21 @@ function spendOnDefense(A, wave, prof) {
 
   /* 2) Forska. AI:n väljer ETT huvudelement efter hotbilden och håller sig
      till det — samma tvång som spelaren har, den har inte råd med alla. */
-  if (!A.mainEl) {
-    A.mainEl = BRANCH_KEYS
+  /* Elementvalet omprövas var tjugonde sekund. Tidigare låstes det vid
+     första grenen och satt kvar hela matchen — bytte du sedan till en
+     creeptyp som elementet var svagt mot stod AI:n kvar med fel torn och
+     kunde inte göra något åt det. Redan byggda torn behåller sitt element;
+     bytet gäller nya. */
+  A.reviewT -= cfg.tick;
+  if (!A.mainEl || A.reviewT <= 0) {
+    A.reviewT = 20;
+    const ranked = BRANCH_KEYS
       .map(br => ({ br, v: valueAgainst('wall', 3, br, prof) }))
-      .sort((x, z) => z.v - x.v)[Math.random() < cfg.iq ? 0 : Math.floor(Math.random() * BRANCH_KEYS.length)].br;
+      .sort((x, z) => z.v - x.v);
+    const best = Math.random() < cfg.iq ? ranked[0] : ranked[Math.floor(Math.random() * ranked.length)];
+    const cur = ranked.find(r => r.br === A.mainEl);
+    // Byt bara om det nya är tydligt bättre, annars blir den obeslutsam.
+    if (!A.mainEl || best.v > (cur ? cur.v : 0) * 1.25) A.mainEl = best.br;
   }
   const maxTowerLv = b.towers.reduce((m, t) => (t.branch === A.mainEl ? Math.max(m, t.lv) : m), -1);
   const resLv = A.research[A.mainEl] || 0;
