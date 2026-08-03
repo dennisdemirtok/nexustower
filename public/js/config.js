@@ -459,7 +459,10 @@ export const CREEPS = {
   },
 };
 
-export const CREEP_KEYS = Object.keys(CREEPS);
+/* Sorterade efter pris. Ordningen kom tidigare ur i vilken ordning de
+   skrevs in, så BANDIT på 350 låg efter DRAKE på 5000 — och i en rad man
+   scrollar är priset det enda man jämför på. */
+export const CREEP_KEYS = Object.keys(CREEPS).sort((a, b) => CREEPS[a].cost - CREEPS[b].cost);
 
 /* Både income och bounty räknas ur kostnaden. Handskrivna heltal glider vid
    avrundning — FÅR hamnade på 5 % i stället för 7 % — och då slutar
@@ -471,7 +474,11 @@ export const creepIncome = key => CREEPS[key].cost * ECON.incomeRate;
 export const creepBounty = key => CREEPS[key].cost * ECON.bountyRate;
 /* Tier låses upp på matchtid, inte på inkomst — då kommer trappan i samma
    takt för båda spelarna oavsett hur de spelat. */
-export const creepUnlocked = (key, seconds) => seconds >= (CREEPS[key].unlockMin || 0) * 60;
+/* Guldet är enda spärren. Tidslåsen begränsade en spelare som sparat ihop
+   till något dyrare, vilket är precis det beteende ekonomin ska belöna.
+   unlockMin finns kvar i speldatan eftersom tierHp använder den för att
+   skala HP — men den styr inte längre vad man får skicka. */
+export const creepUnlocked = () => true;
 export const sendUpCost = (key, lv) => ECON.sendUpCost(CREEPS[key].cost, lv);
 export const sendHpMul = lv => Math.pow(1 + ECON.sendUpHp, lv);
 export const waveHpMul = wave => Math.pow(ECON.waveHp, wave);
