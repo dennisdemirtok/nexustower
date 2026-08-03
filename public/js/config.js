@@ -434,13 +434,13 @@ export const CREEPS = {
   bandit: {
     nm: 'BANDIT', shape: 'dart', color: '#e0a03d', cls: 'latt', sprite: 'bandit',
     hp: 900, spd: 1.25, r: 0.30, cost: 350, leak: 1, unlockMin: 3,
-    siege: 40, siegeRange: 1.6,
+    siege: 26, siegeRange: 1.6,
     note: 'Skjuter på tornen den passerar — flytta inte allt till en rad',
   },
   krossare: {
     nm: 'KROSSARE', shape: 'boss', color: '#c94f2e', cls: 'pans', sprite: 'krossare',
     hp: 26000, spd: 0.75, r: 0.48, cost: 7000, leak: 6, unlockMin: 13,
-    siege: 620, siegeRange: 2.0,
+    siege: 420, siegeRange: 2.0,
     note: 'River torn. Det enda som tvingar fram ombyggnad mitt i matchen',
   },
   svarm: {
