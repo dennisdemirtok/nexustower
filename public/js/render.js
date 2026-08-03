@@ -42,7 +42,7 @@ export function resize() {
      dekorband — staket, stubbar, kristaller — som ligger UTANFÖR rutnätet.
      Poängen är att varje ruta på fältet ska betyda "här kan jag bygga" och
      ingenting annat; allt som bara är utsmyckning hör hemma i bandet. */
-  const cell = Math.min((w - 24) / (COLS + 1.5), (h - 26) / (ROWS + 1.5));
+  const cell = Math.min((w - 12) / (COLS + 1.25), (h - 10) / (ROWS + 1.25));
   const ox = (w - cell * COLS) / 2, oy = (h - cell * ROWS) / 2;
   L.me = makeSlot(ox, oy, cell);
   L.foe = L.me;
@@ -86,10 +86,10 @@ export function drawFrame(G) {
 
   const hostile = G.view === 'atk';
   drawBoard(G, hostile ? G.foe.board : G.me.board, L.me, hostile, G);
-  drawSlotLabel(L.me,
-    hostile ? '⚔ ' + G.foe.name + ' — dina creeps anfaller här'
-            : '🛡 DIN BANA — dra för att bygga en rad',
-    hostile ? '#ff5d73' : '#4fd8eb', hostile ? G.foe.board : G.me.board);
+  /* Etiketten är borta. Den upprepade vad F- och A-knapparna i bottenraden
+     redan säger, och tog en rad höjd som brädet får bättre användning av.
+     Vems bana man ser framgår av ramens färg: cyan är din, korall är
+     motståndarens. */
   drawPost();
 }
 
@@ -191,7 +191,7 @@ const PROPS = ['stump', 'plant', 'crystal', 'rock-2', 'rock-3', 'totem', 'bush',
 function drawSurround(b, s, hostile, time) {
   const { cell, ox, oy } = s;
   const W = COLS * cell, H = ROWS * cell;
-  const band = cell * 0.75;
+  const band = cell * 0.62;
 
   // Markremsa under bandet, mörkare än fältet så gränsen syns.
   CX.fillStyle = hostile ? 'rgba(40,10,28,.55)' : 'rgba(8,20,26,.55)';
@@ -303,7 +303,11 @@ function drawGrid(b, s, G, time = 0) {
       CX.globalCompositeOperation = 'multiply'; CX.fillStyle = 'rgba(150,120,160,.35)'; CX.fillRect(0, 0, W, H); }
     CX.restore();
   } else {
-    CX.drawImage(terrainFor(b, cell, b.entry[0] * 31 + b.exit[1] * 7 + b.rock.size, hostile), ox, oy, W, H);
+    /* Marktexturen laddas asynkront. Ritade vi den procedurella under tiden
+       blinkade brädet från gammal grön mark till den mörka på en bildruta,
+       vilket såg ut som ett fel. En jämn ton väntar in bilden i stället. */
+    CX.fillStyle = hostile ? '#241322' : '#12202a';
+    CX.fillRect(ox, oy, W, H);
   }
   CX.filter = 'none';
   /* Ramen och rutnätet ligger i gränssnittets egna färger. Tidigare var de

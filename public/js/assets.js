@@ -17,7 +17,11 @@ let enabled = true;
    adressfältet så vi kan växla mellan dem i samma match och faktiskt se
    skillnaden i stället för att jämföra minnesbilder. Saknas en fil i
    3d-uppsättningen faller den tillbaka på den målade. */
-let set = 'malad';
+/* 3D är standard sedan modellerna blev kompletta. Det var inte bara snyggare
+   — BANDIT, KROSSARE och SVÄRMMODER finns bara i den uppsättningen, så med
+   den målade som förval visade knapparna en ritad platshållare i stället för
+   figuren. ?art=malad finns kvar för jämförelse. */
+let set = '3d';
 try {
   const q = new URLSearchParams(location.search).get('art');
   if (q === '3d' || q === 'malad') set = q;
