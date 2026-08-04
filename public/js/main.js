@@ -751,20 +751,40 @@ document.addEventListener('visibilitychange', () => {
    Loop
    ============================================================ */
 const STEP = 1 / 60;
-let last = performance.now(), acc = 0;
+
+/* Simuleringen drivs av VÄGGKLOCKAN, inte av hur ofta loopen råkar anropas.
+   Tidigare klipptes varje kliv till 0,25 s, vilket i praktiken betydde att
+   all tid man varit borta kastades bort: gömde man fliken stannade banan,
+   och när man kom tillbaka fortsatte den som om ingenting hänt. I kampanjen
+   är det en paus och helt rimligt. Online är det fusk — creepsen står still,
+   man läcker inte, och den som anfaller en ser en fryst ANFALL-vy.
+
+   Nu sparas den förflutna tiden i stället och betas av i fasta kliv.
+   Två tak håller det hanterbart:
+     MAX_EFTERSLAP  hur mycket speltid vi över huvud taget sparar. Är man
+                    borta längre än så efterskänks resten — annars kunde en
+                    telefon som legat i fickan i tjugo minuter komma tillbaka
+                    till en match som är avgjord utan att man sett den.
+     MAX_KLIV       hur många kliv ett enda anrop får ta, så tråden aldrig
+                    låser sig medan efterslapet betas av.                  */
+const MAX_EFTERSLAP = 30;
+const MAX_KLIV = 1800;           // = MAX_EFTERSLAP i fasta kliv
+
+let sistTick = performance.now(), acc = 0;
+
+function advance(now) {
+  const real = Math.max(0, (now - sistTick) / 1000);
+  sistTick = now;
+  if (!G || G.paused || G.over) return;
+  acc = Math.min(MAX_EFTERSLAP, acc + real * G.speed);
+  let n = 0;
+  while (acc >= STEP && n++ < MAX_KLIV) { update(STEP); acc -= STEP; }
+  netTick(real);
+}
 
 function loop(now) {
   requestAnimationFrame(loop);
-  let dt = (now - last) / 1000;
-  last = now;
-  if (dt > 0.25) dt = 0.25;
-
-  if (G && !G.paused && !G.over) {
-    acc += dt * G.speed;
-    let guard = 0;
-    while (acc >= STEP && guard++ < 30) { update(STEP); acc -= STEP; }
-    netTick(dt);
-  }
+  advance(now);
   if (G) UI.updateHUD();
   /* Ett fel i ritningen får inte döda spelet. Det har hänt två gånger att en
      saknad funktion kastade mitt i drawFrame, och då slutade hela canvasen
@@ -779,6 +799,23 @@ function loop(now) {
     }
   }
 }
+
+/* Vakthund. requestAnimationFrame slutar helt att anropas i en gömd flik —
+   och i vissa inbäddade vyer även när fliken syns. Den här timern mäter hur
+   länge sedan loopen gick, och tar över simuleringen om den tystnat. Den
+   ritar ingenting och rör inte HUD:en; ingen tittar ändå.
+
+   Bara online. I kampanjen är en gömd flik en paus, och det är meningen.
+
+   Webbläsare bromsar setInterval till ungefär en gång i sekunden i bakgrunden,
+   men det spelar ingen roll: advance() räknar på verklig förfluten tid, så
+   ett glest anrop hinner ikapp lika mycket som många täta. */
+setInterval(() => {
+  if (!G || G.mode !== 'online' || G.over || G.paused) return;
+  const now = performance.now();
+  if (now - sistTick < 250) return;      // loopen lever — låt den vara
+  advance(now);
+}, 200);
 
 /* ============================================================
    Boot
