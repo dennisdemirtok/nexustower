@@ -250,6 +250,7 @@ function stepCreeps(b, dt, hooks) {
        Tornet tas bort när livet är slut och flödesfältet räknas om, så
        labyrinten öppnar sig av sig själv. */
     const d0 = CREEPS[c.type];
+    c.belagrar = false;
     if (d0.siege) {
       let mal = null, bast = d0.siegeRange * d0.siegeRange;
       for (const tw of b.towers) {
@@ -258,6 +259,10 @@ function stepCreeps(b, dt, hooks) {
         if (q < bast) { bast = q; mal = tw; }
       }
       if (mal) {
+        // Belägraren stannar vid tornet i stället för att gå förbi. Det är
+        // en anfallare, inte en förbipasserande — och först när tornet är
+        // borta fortsätter den mot nästa.
+        c.belagrar = true;
         /* Skadan är en andel av tornets maxliv, inte ett fast tal. Med fast
            skada blev spannet orimligt: ett trätorn för 50 guld har 3000 liv
            och föll på sju sekunder, medan ett nivå 6-torn med sjuttontusen i
@@ -278,6 +283,7 @@ function stepCreeps(b, dt, hooks) {
           addParts(b, mal.cx, mal.cy, 18, '#c9a06a', 4.5, 0.8);
           b.shake = 1;
           rebuildSolid(b);
+          c.belagrar = false;
           if (hooks.onTowerLost) hooks.onTowerLost(mal);
         }
       }
@@ -293,7 +299,9 @@ function stepCreeps(b, dt, hooks) {
        Gäller båda sorterna; flygande använder t även som färdsträcka sedan. */
     if (c.t < 0) { c.t += dt; continue; }
 
-    const step = c.spd * (1 - c.slow) * dt;
+    // En belägrare som river står still. Den är en anfallare, inte en
+    // förbipasserande, och går vidare först när tornet är borta.
+    const step = c.belagrar ? 0 : c.spd * (1 - c.slow) * dt;
     let arrived = false;
 
     /* Färdriktningen. Den behövs för att creepen ska vända sig när banan
@@ -410,7 +418,9 @@ export function stepBoard(b, dt, hooks = {}) {
    snapshots så det ser levande ut i stället för att hacka i 6 fps. */
 export function stepRemote(b, dt) {
   for (const c of b.creeps) {
-    const step = c.spd * (1 - c.slow) * dt;
+    // En belägrare som river står still. Den är en anfallare, inte en
+    // förbipasserande, och går vidare först när tornet är borta.
+    const step = c.belagrar ? 0 : c.spd * (1 - c.slow) * dt;
     if (c.fly) { c.t += step; continue; }
     const cx = Math.max(0, Math.min(COLS - 1, Math.round(c.x)));
     const cy = Math.max(0, Math.min(ROWS - 1, Math.round(c.y)));
