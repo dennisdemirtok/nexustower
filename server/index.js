@@ -44,56 +44,149 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 /* ------------------------------------------------------------------ *
  * Matchmaking + relä.
- * Servern simulerar ingenting. Varje klient äger sin egen bana och
- * skickar (a) kommandon när något lämnar banan mot motståndaren och
- * (b) en snapshot ~6 ggr/s så motståndaren kan rita ANFALL-vyn.
+ *
+ * Servern simulerar ingenting. Ett rum är en RING av spelare: var och en
+ * anfaller nästa i ringen och försvarar sig mot föregående. Vanlig 1v1 är
+ * samma sak med två spelare — då är nästa och föregående samma person och
+ * ringen beter sig precis som det gamla duelläget. Det är därför det bara
+ * finns EN kodväg här: allt är kedja, 1v1 är kedjan med två länkar.
+ *
+ * Varje klient äger sin egen bana och skickar
+ *   send/pass  → nästa spelare (det jag anfaller med)
+ *   snap/steal → föregående spelare (den som anfaller MIG)
+ * Snapshoten går bakåt eftersom det är min anfallare som behöver rita min
+ * bana i sin ANFALL-vy. Livstölden går samma väg: läcker jag, vinner den
+ * som skickade creepen.
  * ------------------------------------------------------------------ */
 
 const clients = new Map(); // ws -> player
-const rooms = new Map();   // roomId -> {id, a, b, mapIndex, startedAt}
-let queue = [];
+const rooms = new Map();   // roomId -> room
+const queues = new Map();  // 'chain:3' -> [player]
 let nextId = 1;
 
 const MAP_COUNT = 5;
+const SIZES = new Set([2, 3, 4]);
 
 function send(ws, msg) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
 }
 
 function makePlayer(ws) {
-  return { id: nextId++, ws, name: 'PILOT', room: null, alive: true, lastSeen: Date.now() };
+  return { id: nextId++, ws, name: 'PILOT', room: null, queue: null, lives: 0, lastSeen: Date.now() };
 }
 
-function tryMatch() {
-  queue = queue.filter(p => p.ws.readyState === p.ws.OPEN && !p.room);
-  while (queue.length >= 2) {
-    const a = queue.shift();
-    const b = queue.shift();
-    const room = {
-      id: 'r' + nextId++,
-      a, b,
-      mapIndex: Math.floor(Math.random() * MAP_COUNT),
-      startedAt: Date.now(),
-    };
-    rooms.set(room.id, room);
-    a.room = room; b.room = room;
-    send(a.ws, { t: 'match', room: room.id, mapIndex: room.mapIndex, opp: b.name });
-    send(b.ws, { t: 'match', room: room.id, mapIndex: room.mapIndex, opp: a.name });
+/* ---------------- kö ---------------- */
+const qkey = (mode, size) => `${mode}:${size}`;
+
+function leaveQueue(p) {
+  if (!p.queue) return;
+  const k = p.queue;
+  p.queue = null;
+  const q = queues.get(k);
+  if (!q) return;
+  queues.set(k, q.filter(x => x !== p));
+  pumpQueue(k);
+}
+
+function joinQueue(p, mode, size) {
+  leaveQueue(p);
+  const k = qkey(mode, size);
+  const q = queues.get(k) || [];
+  q.push(p);
+  queues.set(k, q);
+  p.queue = k;
+  pumpQueue(k);
+}
+
+/* Starta så många rum som kön räcker till och berätta för resten hur
+   många de väntar på. Lobbyn ÄR kön — det finns ingen värd som trycker
+   på start, rummet öppnar i samma stund som sista platsen fylls. */
+function pumpQueue(k) {
+  const [mode, sizeStr] = k.split(':');
+  const size = Number(sizeStr);
+  let q = (queues.get(k) || []).filter(p => p.ws.readyState === p.ws.OPEN && !p.room);
+  while (q.length >= size) startRoom(q.splice(0, size), mode);
+  queues.set(k, q);
+  for (const p of q) {
+    p.queue = k;
+    send(p.ws, { t: 'lobby', mode, size, have: q.length, need: size - q.length, names: q.map(x => x.name) });
   }
 }
 
-function opponentOf(p) {
-  if (!p.room) return null;
-  return p.room.a === p ? p.room.b : p.room.a;
+/* ---------------- ring ---------------- */
+function startRoom(players, mode) {
+  const room = {
+    id: 'r' + nextId++,
+    mode,
+    size: players.length,
+    order: players.slice(),
+    mapIndex: Math.floor(Math.random() * MAP_COUNT),
+    startedAt: Date.now(),
+  };
+  rooms.set(room.id, room);
+  for (const p of players) { p.room = room; p.queue = null; p.lives = 0; }
+  players.forEach((p, seat) => {
+    send(p.ws, {
+      t: 'match',
+      room: room.id,
+      mapIndex: room.mapIndex,
+      mode: room.mode,
+      size: room.size,
+      seat,
+      id: p.id,
+      ...ringPayload(room, p),
+    });
+  });
 }
 
-function closeRoom(room, reason, loserId) {
+const stepIn = (room, p, d) => {
+  const i = room.order.indexOf(p);
+  if (i < 0 || !room.order.length) return null;
+  return room.order[(i + d + room.order.length) % room.order.length];
+};
+
+const nextOf = p => (p.room ? stepIn(p.room, p, +1) : null);
+const prevOf = p => (p.room ? stepIn(p.room, p, -1) : null);
+
+/* Vem anfaller vem — skickas vid start och varje gång någon slås ut, för
+   då sluter sig ringen och två spelare får en ny granne. */
+function ringPayload(room, p) {
+  const nx = stepIn(room, p, +1), pv = stepIn(room, p, -1);
+  return {
+    alive: room.order.length,
+    ring: room.order.map(q => ({ id: q.id, name: q.name, lives: q.lives })),
+    target: nx ? nx.name : '', targetId: nx ? nx.id : 0,
+    attacker: pv ? pv.name : '', attackerId: pv ? pv.id : 0,
+  };
+}
+
+function sendRing(room) {
+  for (const p of room.order) send(p.ws, { t: 'ring', ...ringPayload(room, p) });
+}
+
+/* Ut ur ringen. Placeringen är antalet spelare som fortfarande lever plus
+   en själv — den som ryker först i en fyra blir alltså fyra. */
+function eliminate(p, reason) {
+  const room = p.room;
   if (!room || !rooms.has(room.id)) return;
-  rooms.delete(room.id);
-  for (const p of [room.a, room.b]) {
-    if (!p) continue;
-    p.room = null;
-    if (p.id !== loserId) send(p.ws, { t: reason });
+  const i = room.order.indexOf(p);
+  if (i < 0) return;
+  room.order.splice(i, 1);
+  p.room = null;
+  const place = room.order.length + 1;
+
+  if (reason !== 'left') send(p.ws, { t: 'eliminated', place, of: room.size });
+  for (const q of room.order) {
+    send(q.ws, { t: 'out', id: p.id, name: p.name, place, alive: room.order.length, reason });
+  }
+
+  if (room.order.length <= 1) {
+    const w = room.order[0];
+    room.order = [];
+    rooms.delete(room.id);
+    if (w) { w.room = null; send(w.ws, { t: 'win', place: 1, of: room.size }); }
+  } else {
+    sendRing(room);
   }
 }
 
@@ -106,37 +199,57 @@ wss.on('connection', (ws) => {
     let m;
     try { m = JSON.parse(raw.toString()); } catch { return; }
     player.lastSeen = Date.now();
-    const opp = opponentOf(player);
 
     switch (m.t) {
-      case 'find':
+      case 'find': {
         if (player.room) return;
         player.name = String(m.name || 'PILOT').slice(0, 14).toUpperCase();
-        if (!queue.includes(player)) queue.push(player);
-        send(ws, { t: 'waiting', queued: queue.length });
-        tryMatch();
+        const mode = m.mode === 'chain' ? 'chain' : 'duel';
+        const size = SIZES.has(m.size) ? m.size : (mode === 'chain' ? 3 : 2);
+        joinQueue(player, mode, size);
         break;
+      }
 
       case 'cancel':
-        queue = queue.filter(p => p !== player);
+        leaveQueue(player);
         send(ws, { t: 'cancelled' });
         break;
 
-      // Vidarebefordra allt spelrelaterat rakt av till motståndaren.
+      // Framåt i ringen: det jag anfaller med.
       case 'send':
-      case 'snap':
-      case 'steal':
-      case 'emote':
-        if (opp) send(opp.ws, m);
+      case 'pass':
+      case 'emote': {
+        const nx = nextOf(player);
+        if (nx) send(nx.ws, { ...m, from: player.id, fromName: player.name });
         break;
+      }
+
+      // Bakåt i ringen: min bana och mina läckor tillhör den som anfaller mig.
+      case 'snap':
+      case 'steal': {
+        const pv = prevOf(player);
+        if (pv) send(pv.ws, { ...m, from: player.id });
+        break;
+      }
+
+      /* Livräknaren för hela ringen. Snapshoten går bara till en granne, så
+         utan det här skulle man aldrig se hur det går för den tredje
+         spelaren — och i en kedja är det just den man behöver hålla koll på
+         för att veta om trycket är på väg att nå en själv. */
+      case 'life': {
+        player.lives = m.l | 0;
+        const room = player.room;
+        if (room) for (const q of room.order) if (q !== player) send(q.ws, { t: 'lives', id: player.id, l: player.lives });
+        break;
+      }
 
       case 'lose':
-        if (player.room) closeRoom(player.room, 'opp_lost', player.id);
+        eliminate(player, 'lost');
         break;
 
       case 'leave':
-        if (player.room) closeRoom(player.room, 'opp_left', player.id);
-        queue = queue.filter(p => p !== player);
+        leaveQueue(player);
+        eliminate(player, 'left');
         break;
 
       case 'ping':
@@ -146,8 +259,8 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    queue = queue.filter(p => p !== player);
-    if (player.room) closeRoom(player.room, 'opp_left', player.id);
+    leaveQueue(player);
+    eliminate(player, 'left');
     clients.delete(ws);
   });
 
@@ -158,8 +271,8 @@ wss.on('connection', (ws) => {
 setInterval(() => {
   for (const [ws, p] of clients) {
     if (ws.readyState !== ws.OPEN) {
-      queue = queue.filter(q => q !== p);
-      if (p.room) closeRoom(p.room, 'opp_left', p.id);
+      leaveQueue(p);
+      eliminate(p, 'left');
       clients.delete(ws);
     }
   }

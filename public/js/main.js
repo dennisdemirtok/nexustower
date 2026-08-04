@@ -2,6 +2,7 @@ import {
   MAPS, TOWERS, TOWER_KEYS, CREEPS, CREEP_KEYS, ECON, BASE_LEVELS, MAX_TOWER_LV,
   buildCost, sendUpCost, creepIncome, waveHpMul, towerStat, towerFace, needsBranch,
   BRANCH_KEYS, RESEARCH, researchCost, requiredResearch, creepUnlocked, applyDiff,
+  CHAIN,
 } from './config.js';
 import { makeBoard, towerAt, canBuild, rebuildSolid } from './board.js';
 import { spawn, stepBoard, stepRemote, addFx, addFloat, addParts } from './sim.js';
@@ -14,6 +15,7 @@ import * as Audio from './audio.js';
 const CV = document.getElementById('cv');
 let G = null;
 let snapT = 0;
+let lifeT = 0;
 
 /* ============================================================
    Matchuppsättning
@@ -32,7 +34,7 @@ function makeSide(name) {
   };
 }
 
-function newMatch({ mode, mapIndex, foeName }) {
+function newMatch({ mode, mapIndex, foeName, net }) {
   const M = MAPS[mapIndex];
   G = {
     mode, mapIndex, map: M,
@@ -42,6 +44,11 @@ function newMatch({ mode, mapIndex, foeName }) {
     buildFade: 0, hoverCell: null, hoverOk: true,
     me: makeSide('DU'),
     foe: makeSide(foeName || M.ai.nm),
+    /* Ringen. null i kampanjen, annars vem jag anfaller, vem som anfaller
+       mig och hur många som fortfarande lever. Kedjan och vanlig 1v1 är
+       samma sak — 1v1 är bara en ring med två länkar, där mitt mål och min
+       anfallare råkar vara samma person. */
+    net: net || null,
   };
   towerSig = '';   // ny match, tvinga fram en full tornlista i första snapshoten
   G.me.board = makeBoard(M);
@@ -54,15 +61,48 @@ function newMatch({ mode, mapIndex, foeName }) {
   UI.hideOverlays();
   UI.setViewTabs('def');
   UI.refreshSendbar();
+  UI.updateRing(G);
   UI.updateHUD();
+  const kedja = net && net.kind === 'chain';
   document.getElementById('sector').textContent =
-    mode === 'campaign' ? `SEKTOR ${mapIndex + 1} · ${M.name}` : `ONLINE · ${M.name}`;
+    mode === 'campaign' ? `SEKTOR ${mapIndex + 1} · ${M.name}`
+      : kedja ? `KEDJA ${net.size} · ${M.name}`
+      : `ONLINE · ${M.name}`;
 
-  UI.banner(mode === 'campaign' ? `SEKTOR ${mapIndex + 1}` : 'MATCH', `${M.name} · ${G.foe.name}`);
+  UI.banner(
+    mode === 'campaign' ? `SEKTOR ${mapIndex + 1}` : kedja ? `KEDJAN · ${net.size} SPELARE` : 'MATCH',
+    kedja ? `Du anfaller ${G.foe.name} · ${net.attacker} anfaller dig` : `${M.name} · ${G.foe.name}`);
   snapT = 0;
+  lifeT = 0;
   R.resize();
   Audio.unlock();
   Audio.startMusic();
+}
+
+/* Ringen har ändrats: matchen startade, eller någon slogs ut och grannarna
+   fick nya platser. Byter jag mål måste fjärrbanan börja om från noll —
+   snapshoten från den nya spelaren beskriver en helt annan bana. */
+function applyRing(m) {
+  if (!G || !G.net) return;
+  const n = G.net;
+  const bytteMal = n.targetId && m.targetId && n.targetId !== m.targetId;
+  n.alive = m.alive;
+  n.ring = m.ring || n.ring;
+  n.attacker = m.attacker;
+  n.attackerId = m.attackerId;
+  n.targetId = m.targetId;
+
+  if (bytteMal) {
+    G.foe = makeSide(m.target);
+    G.foe.board = makeBoard(G.map);
+    G.foe.board.remote = true;
+    G.foe.board._map = new Map();
+    UI.banner('NYTT MÅL', `${m.target} · ${m.attacker} anfaller dig`);
+    Audio.sfx.wave(0);
+  } else {
+    G.foe.name = m.target;
+  }
+  UI.updateRing(G);
 }
 
 const waveMul = () => waveHpMul(G.wave);
@@ -131,7 +171,7 @@ function update(dt) {
       addFloat(G.me.board, p.x, p.y, '+' + Math.round(c.bounty), '#ffd166');
       Audio.sfx.death();
     },
-    onLeak: n => hurtMe(n),
+    onLeak: (n, igenom) => hurtMe(n, igenom),
     onFire: st => Audio.sfx.shoot(st.dmgType),
     onImpact: st => { if (st.splash) Audio.sfx.boom(st.splash); },
   });
@@ -160,7 +200,7 @@ const steal = (side, n) => {
   side.board.lives = Math.min(ECON.maxLives, side.board.lives + n);
 };
 
-function hurtMe(n) {
+function hurtMe(n, igenom) {
   if (G.over) return;
   G.me.board.lives -= n;
   UI.alertTab('def');
@@ -169,11 +209,31 @@ function hurtMe(n) {
   // I kampanjen sköter vi båda sidor; online måste motståndaren få veta.
   if (G.mode === 'campaign') steal(G.foe, n);
   else Net.send({ t: 'steal', n });
+  passOn(igenom);
   if (G.me.board.lives <= 0) {
     G.me.board.lives = 0;
-    if (G.mode === 'online') Net.send({ t: 'lose' });
-    endMatch(false);
+    if (G.mode === 'online') { Net.send({ t: 'lose' }); endMatch(false, G.net ? G.net.alive : 2); }
+    else endMatch(false);
   }
+}
+
+/* Läckan rullar vidare. En creep som tar sig igenom min bana dör inte —
+   den fortsätter in hos den jag anfaller, med den hälsa den hade kvar när
+   den gick igenom. Jag förlorar liv på den ändå, men klarar inte grannen
+   den heller får jag liven tillbaka från dem. Det är hela poängen med
+   kedjan: trycket vandrar runt ringen i stället för att ta slut hos den
+   som råkade läcka först. */
+function passOn(igenom) {
+  if (!igenom || !igenom.length) return;
+  if (!G.net || G.net.kind !== 'chain') return;
+  const tak = CHAIN.maxHops(G.net.alive);
+  let n = 0;
+  for (const c of igenom) {
+    if (c.hop >= tak) continue;
+    Net.send({ t: 'pass', key: c.type, lv: c.lv, hop: c.hop + 1, frac: c.frac, wave: G.wave });
+    n++;
+  }
+  if (n) addFloat(G.me.board, G.me.board.exit[0], G.me.board.exit[1], `→ ${G.foe.name}`, '#ff9d54');
 }
 
 function hurtFoe(n) {
@@ -349,7 +409,7 @@ function cycleSpeed() {}
 /* ============================================================
    Slut på match
    ============================================================ */
-function endMatch(win) {
+function endMatch(win, place) {
   if (G.over) return;
   G.over = true;
   Audio.stopMusic();
@@ -359,20 +419,28 @@ function endMatch(win) {
     cleared.add(G.mapIndex);
     UI.saveCleared(cleared);
   }
+  const kedja = !!(G.net && G.net.kind === 'chain');
   const mins = Math.floor(G.time / 60), secs = Math.floor(G.time % 60);
+  const stats = [
+    { k: 'TID', v: `${mins}:${String(secs).padStart(2, '0')}` },
+    { k: 'SKICKADE', v: G.me.sent },
+    { k: 'KILLS', v: G.me.kills },
+    { k: 'INKOMST', v: Math.round(G.me.income) },
+    { k: 'LIV KVAR', v: Math.max(0, G.me.board.lives) },
+  ];
+  if (kedja && place) stats.unshift({ k: 'PLACERING', v: `${place}/${G.net.size}` });
+
   UI.showEnd({
     win,
-    title: win ? 'SEGER' : 'GENOMBRUTEN',
-    sub: win
-      ? `Du bröt igenom ${G.foe.name}s försvar.`
-      : `Din nexus föll. ${G.mode === 'campaign' ? 'Tips: bygg färre torn men uppgradera dem — nivå 6 ger ~14× DPS mot nivå 1.' : ''}`,
-    stats: [
-      { k: 'TID', v: `${mins}:${String(secs).padStart(2, '0')}` },
-      { k: 'SKICKADE', v: G.me.sent },
-      { k: 'KILLS', v: G.me.kills },
-      { k: 'INKOMST', v: Math.round(G.me.income) },
-      { k: 'LIV KVAR', v: Math.max(0, G.me.board.lives) },
-    ],
+    title: win ? (kedja ? 'SISTA KVAR' : 'SEGER') : (kedja ? 'UTSLAGEN' : 'GENOMBRUTEN'),
+    sub: kedja
+      ? (win
+        ? `Du stod kvar när ringen var tom. ${G.net.size} spelare, du blev ettan.`
+        : `Din nexus föll. Du kom ${place || '?'}:a av ${G.net.size} — kedjan spelar vidare utan dig.`)
+      : win
+        ? `Du bröt igenom ${G.foe.name}s försvar.`
+        : `Din nexus föll. ${G.mode === 'campaign' ? 'Tips: bygg färre torn men uppgradera dem — nivå 6 ger ~14× DPS mot nivå 1.' : ''}`,
+    stats,
     showNext: win && G.mode === 'campaign' && G.mapIndex < MAPS.length - 1,
   });
 }
@@ -460,46 +528,117 @@ function applySnapshot(s) {
   b.creeps = b.creeps.filter(c => seen.has(c.id));
 }
 
+/* Det som ska ut på nätet varje bildruta. Ligger utanför loopen så att
+   testkroken nedan kan driva en hel match manuellt — panelen spelet körs i
+   under utveckling fryser requestAnimationFrame, och utan det här hade
+   snapshots och livräknare aldrig gått iväg när man stegar fram för hand. */
+function netTick(dt) {
+  if (!G || G.mode !== 'online' || G.over) return;
+  snapT -= dt;
+  if (snapT <= 0) { snapT = 1 / 6; Net.send({ t: 'snap', s: snapshot() }); }
+  /* Snapshoten går bara bakåt till min anfallare, så i en kedja skulle
+     ingen annan se hur det går för mig. Livräknaren är billig nog att
+     skicka till hela ringen en gång i sekunden — och det är den siffran
+     man behöver för att veta om trycket är på väg mot en. */
+  lifeT -= dt;
+  if (lifeT <= 0) { lifeT = 1; Net.send({ t: 'life', l: Math.max(0, G.me.board.lives) }); }
+}
+
 function onNetMessage(m) {
   switch (m.t) {
-    case 'waiting':
-      UI.showMatchmaking('SÖKER MOTSTÅNDARE', 'Du står i kö. Öppna spelet i en till flik eller skicka länken till en kompis.');
+    case 'lobby':
+      UI.showLobby(m);
       break;
+
     case 'match':
-      newMatch({ mode: 'online', mapIndex: m.mapIndex, foeName: m.opp || 'MOTSTÅNDARE' });
+      newMatch({
+        mode: 'online',
+        mapIndex: m.mapIndex,
+        foeName: m.target || 'MOTSTÅNDARE',
+        net: {
+          kind: m.mode === 'chain' ? 'chain' : 'duel',
+          size: m.size || 2, seat: m.seat || 0, myId: m.id,
+          alive: m.alive || m.size || 2,
+          ring: m.ring || [],
+          targetId: m.targetId, attacker: m.attacker, attackerId: m.attackerId,
+        },
+      });
       break;
+
+    case 'ring':
+      applyRing(m);
+      break;
+
     case 'send':
       if (G && G.mode === 'online' && !G.over) {
         spawn(G.me.board, m.key, waveHpMul(m.wave ?? G.wave), m.lv || 0);
         UI.alertTab('def');
       }
       break;
+
+    /* En creep som redan tagit sig igenom någon annans bana. Den kommer in
+       med sin kvarvarande hälsa och en räknare på hur många banor den
+       passerat — en i taget, även för typer som normalt spawnar i par. */
+    case 'pass':
+      if (G && G.mode === 'online' && !G.over) {
+        spawn(G.me.board, m.key, waveHpMul(m.wave ?? G.wave), m.lv || 0,
+          { hpMul: m.frac || 1, count: 1, hop: m.hop || 0 });
+        UI.alertTab('def');
+        UI.toast(`Läcka vidare från ${m.fromName || 'ringen'}`);
+      }
+      break;
+
     case 'snap':
       applySnapshot(m.s);
       break;
+
     case 'steal':
-      // Motståndaren läckte — vi vinner lika många liv som de förlorade.
+      // Den jag anfaller läckte — jag vinner lika många liv som de förlorade.
       if (G && G.mode === 'online' && !G.over) {
         G.me.board.lives = Math.min(ECON.maxLives, G.me.board.lives + (m.n || 0));
         addFloat(G.me.board, 4, 7, '+' + m.n + ' LIV', '#4fd8eb');
       }
       break;
-    case 'opp_lost':
-      if (G && !G.over) { G.foe.board.lives = 0; endMatch(true); }
+
+    case 'lives':
+      if (G && G.net) {
+        const r = G.net.ring.find(p => p.id === m.id);
+        if (r) { r.lives = m.l; UI.updateRing(G); }
+      }
       break;
-    case 'opp_left':
-      if (G && !G.over) { UI.toast('Motståndaren lämnade'); endMatch(true); }
+
+    case 'out':
+      if (G && G.net && !G.over) {
+        G.net.alive = m.alive;
+        G.net.ring = G.net.ring.filter(p => p.id !== m.id);
+        UI.updateRing(G);
+        UI.toast(m.reason === 'left' ? `${m.name} lämnade (${m.place}:a)` : `${m.name} slogs ut — ${m.place}:a plats`);
+      }
       break;
+
+    /* Placeringen räknas ut lokalt i samma stund banan faller, så slutskärmen
+       inte behöver vänta på ett svar som kanske aldrig kommer. Faller två
+       banor i samma ögonblick har båda räknat samma siffra — servern har
+       sista ordet och rättar den i efterhand. */
+    case 'eliminated':
+      if (G && !G.over) { G.me.board.lives = 0; endMatch(false, m.place); }
+      else if (G && G.net) UI.setPlacement(m.place, G.net.size);
+      break;
+
+    case 'win':
+      if (G && !G.over) { G.foe.board.lives = 0; endMatch(true, 1); }
+      break;
+
     case 'cancelled':
       break;
   }
 }
 
-function findMatch(name) {
+function findMatch(name, kind, size) {
   if (!Net.isOpen()) { UI.toast('Ingen kontakt med servern'); return; }
   UI.saveName(name);
-  Net.send({ t: 'find', name });
-  UI.showMatchmaking('SÖKER MOTSTÅNDARE', 'Väntar på en spelare…');
+  Net.send({ t: 'find', name, mode: kind === 'chain' ? 'chain' : 'duel', size });
+  UI.showLobby({ mode: kind, size, have: 1, need: size - 1, names: [name] });
 }
 
 function cancelMatch() { Net.send({ t: 'cancel' }); }
@@ -509,6 +648,7 @@ function leave() {
   Audio.stopMusic();
   G = null;
   UI.setState(null);
+  UI.updateRing(null);
 }
 
 /* ============================================================
@@ -623,10 +763,7 @@ function loop(now) {
     acc += dt * G.speed;
     let guard = 0;
     while (acc >= STEP && guard++ < 30) { update(STEP); acc -= STEP; }
-    if (G.mode === 'online') {
-      snapT -= dt;
-      if (snapT <= 0) { snapT = 1 / 6; Net.send({ t: 'snap', s: snapshot() }); }
-    }
+    netTick(dt);
   }
   if (G) UI.updateHUD();
   /* Ett fel i ritningen får inte döda spelet. Det har hänt två gånger att en
@@ -654,7 +791,12 @@ UI.initUI({
   nextSector: () => newMatch({ mode: 'campaign', mapIndex: Math.min(MAPS.length - 1, G.mapIndex + 1) }),
   replay: () => {
     if (!G) return;
-    if (G.mode === 'online') { leave(); UI.showMenu('online'); return; }
+    if (G.mode === 'online') {
+      const tillbaka = G.net && G.net.kind === 'chain' ? 'chain' : 'online';
+      leave();
+      UI.showMenu(tillbaka);
+      return;
+    }
     newMatch({ mode: 'campaign', mapIndex: G.mapIndex });
   },
 });
@@ -679,10 +821,11 @@ window.NW = {
   /* Låter ett testskript driva spelklockan manuellt. Panelen som spelet
      körs i under utveckling fryser requestAnimationFrame, så utan den här
      går det inte att spela igenom en match automatiskt. */
-  step(dt) { if (G && !G.over && !G.paused) update(dt); },
+  step(dt) { if (G && !G.over && !G.paused) { update(dt); netTick(dt); UI.updateHUD(); } },
   run(seconds, dt = 1 / 30) {
     let n = 0;
-    for (let t = 0; t < seconds && G && !G.over; t += dt) { update(dt); n++; }
+    for (let t = 0; t < seconds && G && !G.over; t += dt) { update(dt); netTick(dt); n++; }
+    if (G) UI.updateHUD();
     return n;
   },
 };

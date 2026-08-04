@@ -103,6 +103,23 @@ export const ECON = {
 };
 
 /* ============================================================
+   KEDJAN — tre eller fyra spelare i en ring
+   Var och en anfaller nästa och försvarar sig mot föregående. Det som gör
+   läget till något annat än 1v1 i cirkel är att läckan rullar vidare: en
+   creep som tar sig igenom din bana dör inte, den fortsätter in hos nästa
+   spelare med den hälsa den hade kvar. Du förlorar liv på den ändå — men
+   klarar inte grannen den heller får du liven tillbaka från dem.
+
+   Taket på antalet hopp är storleken minus två, vilket är exakt så långt
+   creepen kan rulla utan att komma tillbaka till den som betalade för
+   den. Utan taket hade en oskadd BOSS kunnat gå varv efter varv.
+   ============================================================ */
+export const CHAIN = {
+  sizes: [3, 4],
+  maxHops: size => Math.max(0, size - 2),
+};
+
+/* ============================================================
    SKADETYPER × PANSARKLASSER
    Hjärtat i taktiken, som i WC3: inget torn är bra mot allt.
    Motståndaren ser vad du bygger och skickar det du är svag mot.

@@ -4,10 +4,13 @@ Modern *line tower wars* för mobil och desktop. Du bygger torn på din egen ban
 och skickar creeps mot motståndarens. Varje creep du skickar höjer din inkomst
 permanent — men ger motståndaren guld när den dör. Först till 0 liv förlorar.
 
-Två lägen:
+Tre lägen:
 
 - **Kampanj** — 5 sektorer mot WARDEN-AI med stigande svårighetsgrad.
 - **Online 1v1** — matchmaking mot en riktig spelare via WebSocket.
+- **Kedjan** — 3–4 spelare i en ring. Du anfaller nästa och försvarar dig mot
+  föregående, och en creep som tar sig igenom din bana rullar vidare till
+  nästa spelare.
 
 ## Kom igång lokalt
 
@@ -17,7 +20,9 @@ npm start
 ```
 
 Öppna http://localhost:3000. För att testa online 1v1 lokalt: öppna två flikar
-och tryck **ONLINE 1v1 → SÖK MATCH** i båda.
+och tryck **ONLINE 1v1 → SÖK MATCH** i båda. Kedjan testas likadant med tre
+eller fyra flikar — men håll dem synliga, en flik i bakgrunden fryser
+`requestAnimationFrame` och därmed hela matchen.
 
 ## Lägg upp på GitHub
 
@@ -74,6 +79,45 @@ procent fanns det valet inte alls.
 lika många. Summan liv i matchen är konstant, så partiet blir en dragkamp som
 faktiskt tar slut — inte två parallella nedräkningar som råkar ta olika lång
 tid. Det är därför WC3-spelare kan stå på 83 liv mot 13.
+
+## Kedjan — 3–4 spelare i en ring
+
+Alla står i en ring. Du anfaller **nästa** spelare och försvarar dig mot
+**föregående**. Ringraden under HUD:en visar hela varvet med liv: du först,
+sedan ditt mål i korall, och din anfallare i gult.
+
+Det som gör läget till något annat än 1v1 i cirkel är att **läckan rullar
+vidare**. En creep som tar sig igenom din bana dör inte — den fortsätter in
+hos den du anfaller, med den hälsa den hade kvar när den gick igenom. Du
+förlorar liv på den ändå, men klarar inte grannen den heller får du liven
+tillbaka från dem.
+
+Följ en creep genom en fyrring A → B → C → D:
+
+| Steg | Vad händer | Liv |
+|------|------------|-----|
+| A skickar till B | B får creepen (hopp 0) | — |
+| B läcker | creepen går vidare till C (hopp 1) | B −1, A +1 |
+| C läcker | creepen går vidare till D (hopp 2) | C −1, B +1 |
+| D läcker | creepen stannar — taket är nått | D −1, C +1 |
+
+Netto: A vinner ett liv, D förlorar ett, B och C går jämnt ut. Trycket
+vandrar alltså runt ringen i stället för att ta slut hos den som råkade läcka
+först — och den som står sist i en kedja av misslyckanden betalar.
+
+Taket på antalet hopp är **antalet levande spelare minus två**, vilket är
+exakt så långt creepen kan rulla utan att komma tillbaka till den som betalade
+för den. I 1v1 blir taket noll, och läget är identiskt med förut.
+
+**Livstöld** följer samma riktning som i 1v1: läcker du, vinner den som
+anfaller dig lika många liv. Summan liv i matchen är konstant hela vägen.
+
+När någon når 0 liv slås de ut och **ringen sluter sig** — deras anfallare får
+ett nytt mål, och du får ett meddelande om ditt byts. Sist kvar vinner, och
+slutskärmen visar placering.
+
+Lobbyn är kön: det finns ingen värd som trycker på start, rummet öppnar i samma
+stund som sista platsen fylls. Tre och fyra spelare är två separata köer.
 
 ## Skadetyper och pansarklasser
 
@@ -162,7 +206,7 @@ skjuter samtidigt till ett grötigt brus.
 ## Så är projektet uppbyggt
 
 ```
-server/index.js      Express + WebSocket. Matchmaking och relä — ingen spellogik.
+server/index.js      Express + WebSocket. Ring, lobby och relä — ingen spellogik.
 public/js/config.js  All balans: ekonomi, torn, creeps, banor. Ändra känslan här.
 public/js/board.js   Rutnät, väg och byggbara rutor.
 public/js/sim.js     Simulering: skjuta, skada, pansar, rörelse, effekter.
@@ -175,13 +219,21 @@ scripts/balance.mjs  Balanstest — kör två AI mot varandra och skriver ut kur
 
 ### Nätverksmodellen
 
-Servern simulerar ingenting. Varje klient äger sin egen bana:
+Servern simulerar ingenting. Ett rum är en **ring** av spelare, och 1v1 är
+samma sak med två länkar — då är nästa och föregående samma person. Det är
+därför det bara finns en kodväg på servern: allt är kedja.
 
-- När du skickar en creep går ett `send`-meddelande till motståndaren, som
-  spawnar den på sin bana.
-- Din bana skickas som en snapshot 6 ggr/s så motståndaren kan rita ANFALL-vyn.
-  Creeps interpoleras mellan snapshots så det ser mjukt ut.
-- När din bana når 0 liv skickar du `lose` och motståndaren får sin seger.
+Varje klient äger sin egen bana:
+
+- `send` och `pass` går **framåt** i ringen, till den du anfaller. `pass` är en
+  läckt creep som rullar vidare, med kvarvarande hälsa och en hoppräknare.
+- `snap` och `steal` går **bakåt**, till den som anfaller dig. Snapshoten går
+  bakåt eftersom det är din anfallare som ritar din bana i sin ANFALL-vy; 6
+  ggr/s, med creeps interpolerade mellan snapshots.
+- `life` går till **hela rummet** en gång i sekunden. Snapshoten når bara en
+  granne, så utan den skulle man aldrig se hur det går för resten av ringen.
+- När din bana når 0 liv skickar du `lose`. Servern plockar dig ur ringen,
+  sluter den igen och skickar ut vem som fått nya grannar. Sist kvar får `win`.
 
 Det gör spelet okänsligt för latens och enkelt att bygga vidare på. Nackdelen är
 att en modifierad klient kan fuska — ett problem först när det finns ranking.
@@ -228,7 +280,8 @@ ekonomin växer exponentiellt.
 - **Försvaret spelade ingen roll.** Alla creeps var samma sorts säck med HP.
   Nu har BJÄSSE och BOSS pansar (platt avdrag per träff) vilket gör PULS
   värdelöst mot dem och tvingar fram BLAST/RAIL — och REGEN kräver burstskada.
-- **Ingen multiplayer.** Nu online 1v1 med matchmaking.
+- **Ingen multiplayer.** Nu online 1v1 med matchmaking, och kedjan för 3–4
+  spelare i en ring.
 - **Grafiken.** Stjärnfält, glödande banor med flödesanimation, torn med
   nivåringar och mynningsflammor, creeps med kontur och pansarmarkering,
   guldsiffror som flyger upp vid kill, träffblink och skärmskak vid läckage.

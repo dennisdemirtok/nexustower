@@ -6,14 +6,20 @@ const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx 
 
 let SEQ = 0;
 
-export function spawn(b, type, wave, lv = 0, hpMulExtra = 1) {
+/* opts: { hpMul, count, hop }
+   hpMul och count används av kedjeläget när en läckt creep skickas vidare
+   till nästa spelare i ringen: den kommer fram med den hälsa den hade när
+   den gick igenom, och en enda creep passas vidare även om typen normalt
+   spawnar i par. hop är hur många banor den redan tagit sig igenom. */
+export function spawn(b, type, wave, lv = 0, opts = {}) {
   const d = CREEPS[type];
-  const hp = d.hp * tierHpMul(type) * wave * sendHpMul(lv) * hpMulExtra;
-  const n = d.count || 1;
+  const hp = d.hp * tierHpMul(type) * wave * sendHpMul(lv) * (opts.hpMul || 1);
+  const n = opts.count || d.count || 1;
   for (let i = 0; i < n; i++) {
     b.creeps.push({
       id: ++SEQ,
       type, lv, cls: d.cls, fly: !!d.fly,
+      hop: opts.hop || 0,
       /* Marktrupper har egna koordinater och följer flödesfältet.
          Jittret gör att de inte går exakt i samma spår. */
       x: b.entry[0] + (Math.random() - 0.5) * 0.5,
@@ -231,6 +237,10 @@ function stepShots(b, dt, hooks) {
 
 function stepCreeps(b, dt, hooks) {
   let leaked = 0;
+  /* Vilka creeps som gick igenom, inte bara hur många liv det kostade.
+     Kedjeläget behöver veta typ, arménivå, kvarvarande hälsa och hur många
+     banor den redan passerat för att kunna släppa in den hos nästa spelare. */
+  const igenom = [];
   for (const c of b.creeps) {
     if (c.dead) continue;
     c.flash = Math.max(0, c.flash - dt * 6);
@@ -344,6 +354,10 @@ function stepCreeps(b, dt, hooks) {
     if (arrived) {
       c.dead = true;
       leaked += c.leak;
+      igenom.push({
+        type: c.type, lv: c.lv, hop: c.hop || 0,
+        frac: Math.max(0.05, Math.min(1, c.hp / c.maxHp)),
+      });
       b.shake = 1;
       b.hurt = 1;
       const p = cPos(b, c);
@@ -358,7 +372,7 @@ function stepCreeps(b, dt, hooks) {
      ingen die-timer och plockas bort direkt, de gick in i nexus. */
   for (const c of b.creeps) if (c.dead && c.die > 0) c.die -= dt;
   b.creeps = b.creeps.filter(c => !c.dead || c.die > 0);
-  if (leaked > 0 && hooks.onLeak) hooks.onLeak(leaked);
+  if (leaked > 0 && hooks.onLeak) hooks.onLeak(leaked, igenom);
 }
 
 function stepFx(b, dt) {

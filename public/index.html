@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css?v=37">
+<link rel="stylesheet" href="/css/style.css?v=38">
 </head>
 <body>
 
@@ -32,6 +32,9 @@
   </div>
 </div>
 
+<!-- Kedjan: vem anfaller vem. Göms helt i kampanj och 1v1. -->
+<div id="ringbar" class="hidden"></div>
+
 <div id="stage">
   <canvas id="cv"></canvas>
   <div id="banner"></div>
@@ -50,6 +53,9 @@
       <button class="modebtn accent" id="modeOnline">
         <b>ONLINE 1v1</b><span>Möt en riktig spelare</span>
       </button>
+      <button class="modebtn accent" id="modeChain">
+        <b>KEDJAN</b><span>3–4 spelare i en ring</span>
+      </button>
     </div>
     <div id="diffpick"></div>
     <div id="maplist"></div>
@@ -61,7 +67,9 @@
     <div class="spinner"></div>
     <h2 id="mmTitle">SÖKER MOTSTÅNDARE</h2>
     <div class="sub" id="mmSub">Håll fliken öppen…</div>
+    <div id="sizepick" class="hidden"></div>
     <input id="mmName" maxlength="14" placeholder="DITT NAMN" autocomplete="off" spellcheck="false">
+    <div id="lobbylist" class="hidden"></div>
     <div style="display:flex;gap:10px">
       <button class="btn primary big" id="mmFind">SÖK MATCH</button>
       <button class="btn big" id="mmCancel">AVBRYT</button>
@@ -115,6 +123,6 @@
 
 <div id="sheetScrim"></div>
 
-<script type="module" src="/js/main.js?v=37"></script>
+<script type="module" src="/js/main.js?v=38"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@ import {
   buildCost, sendUpCost, creepIncome, MAX_TOWER_LV, BASE_LEVELS,
   towerStat, towerFace, needsBranch, branchKeysFor,
   RESEARCH, researchCost, requiredResearch, BRANCH_KEYS, creepUnlocked, DIFFS,
+  CHAIN,
 } from './config.js';
 import { towerDps, towerDpsVs } from './sim.js';
 import { spriteUrl } from './assets.js';
@@ -52,8 +53,12 @@ export function initUI(handlers) {
 
   $('modeCampaign').addEventListener('click', () => showMenu('campaign'));
   $('modeOnline').addEventListener('click', () => showMenu('online'));
-  $('mmFind').addEventListener('click', () => H.findMatch($('mmName').value.trim() || 'PILOT'));
-  $('mmCancel').addEventListener('click', () => { H.cancelMatch(); showMenu('online'); });
+  $('modeChain').addEventListener('click', () => showMenu('chain'));
+  $('mmFind').addEventListener('click', () =>
+    H.findMatch($('mmName').value.trim() || 'PILOT',
+      menuMode === 'chain' ? 'chain' : 'duel',
+      menuMode === 'chain' ? chainSize : 2));
+  $('mmCancel').addEventListener('click', () => { H.cancelMatch(); showMenu(menuMode); });
 
   $('endNext').addEventListener('click', () => H.nextSector());
   $('endAgain').addEventListener('click', () => H.replay());
@@ -101,7 +106,37 @@ export function updateHUD() {
     ? `BYGG · ${Math.ceil(G.prep)}s`
     : `VÅG ${G.wave + 1} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   $('incBar').style.width = (100 * (1 - G.incT / ECON.incInterval)) + '%';
+  updateRing(G);
   refreshSendbarState();
+}
+
+/* Ringraden. I en kedja räcker det inte att veta hur det går för den man
+   anfaller — man behöver se hela varvet, för det är därifrån trycket kommer
+   tillbaka. Raden ritas om bara när texten faktiskt ändrats; den anropas
+   varje bildruta och innerHTML sextio gånger i sekunden är inte gratis. */
+export function updateRing(g) {
+  const el = $('ringbar');
+  if (!el) return;
+  const n = g && g.net;
+  if (!n || n.kind !== 'chain') {
+    if (!el.classList.contains('hidden')) { el.classList.add('hidden'); el.innerHTML = ''; el._sig = ''; }
+    return;
+  }
+  const ring = n.ring || [];
+  // Jag står alltid först, så raden läses som "jag → mitt mål → …" .
+  const i = ring.findIndex(p => p.id === n.myId);
+  const ord = i >= 0 ? ring.slice(i).concat(ring.slice(0, i)) : ring;
+  const html = ord.map(p => {
+    const jag = p.id === n.myId;
+    const liv = jag ? Math.max(0, Math.round(g.me.board.lives)) : (p.lives || null);
+    const roll = p.id === n.targetId ? ' tgt' : p.id === n.attackerId ? ' atk' : '';
+    return `<span class="rp${jag ? ' me' : ''}${roll}"><b>${jag ? 'DU' : p.name}</b><i>${liv ?? '–'}</i></span>`;
+  }).join('<span class="rarr">›</span>');
+  const sig = html + ord.length;
+  if (el._sig === sig) return;
+  el._sig = sig;
+  el.innerHTML = html + '<span class="rarr loop">↺</span>';
+  el.classList.remove('hidden');
 }
 
 export function pop(id) {
@@ -566,6 +601,28 @@ export function openInfo() {
 /* ============ menyer ============ */
 let menuMode = 'campaign';
 
+/* Antal spelare i kedjan. Kön är delad per storlek — tre och fyra är två
+   helt olika köer, annars hade man stått och väntat på folk som väntade på
+   något annat. Valet sparas eftersom man nästan alltid vill ha samma. */
+let chainSize = (() => {
+  try { return Number(localStorage.getItem('nw_chain')) || CHAIN.sizes[0]; }
+  catch { return CHAIN.sizes[0]; }
+})();
+
+function renderSizePicker() {
+  const box = $('sizepick');
+  if (!box) return;
+  box.innerHTML = CHAIN.sizes.map(s =>
+    `<button class="diffbtn${s === chainSize ? ' on' : ''}" data-s="${s}">
+       <b>${s} SPELARE</b><span>${s === 3 ? 'Kortare varv, hårdare tryck' : 'Längre varv, mer att hålla koll på'}</span>
+     </button>`).join('');
+  box.querySelectorAll('.diffbtn').forEach(b => b.addEventListener('click', () => {
+    chainSize = Number(b.dataset.s);
+    try { localStorage.setItem('nw_chain', String(chainSize)); } catch {}
+    renderSizePicker();
+  }));
+}
+
 export function showMenu(mode) {
   if (mode) menuMode = mode;
   $('endOv').classList.add('hidden');
@@ -573,14 +630,23 @@ export function showMenu(mode) {
   $('startOv').classList.remove('hidden');
   $('modeCampaign').classList.toggle('on', menuMode === 'campaign');
   $('modeOnline').classList.toggle('on', menuMode === 'online');
+  $('modeChain').classList.toggle('on', menuMode === 'chain');
+  updateRing(null);
 
-  if (menuMode === 'online') {
+  if (menuMode === 'online' || menuMode === 'chain') {
+    const kedja = menuMode === 'chain';
     $('startOv').classList.add('hidden');
     $('mmOv').classList.remove('hidden');
-    $('mmTitle').textContent = 'ONLINE 1v1';
-    $('mmSub').textContent = 'Två spelare matchas automatiskt. Dela länken med en kompis så hamnar ni i samma kö.';
+    $('mmTitle').textContent = kedja ? 'KEDJAN' : 'ONLINE 1v1';
+    $('mmSub').textContent = kedja
+      ? 'Alla står i en ring: du anfaller nästa spelare och försvarar dig mot föregående. En creep som tar sig igenom din bana rullar vidare till nästa. Sist kvar vinner.'
+      : 'Två spelare matchas automatiskt. Dela länken med en kompis så hamnar ni i samma kö.';
+    $('sizepick').classList.toggle('hidden', !kedja);
+    if (kedja) renderSizePicker();
+    $('lobbylist').classList.add('hidden');
     $('mmFind').style.display = '';
     $('mmName').style.display = '';
+    $('mmFind').textContent = kedja ? 'GÅ MED I KÖN' : 'SÖK MATCH';
     return;
   }
 
@@ -621,20 +687,54 @@ function renderDiffPicker() {
   }));
 }
 
-export function showMatchmaking(text, sub) {
+/* Lobbyn är kön. Det finns ingen värd som trycker på start — rummet
+   öppnar i samma stund som sista platsen fylls, och tills dess ser man vem
+   som redan står där och hur många som saknas. */
+export function showLobby({ mode, size, have, need, names }) {
   $('startOv').classList.add('hidden');
   $('endOv').classList.add('hidden');
   $('mmOv').classList.remove('hidden');
-  $('mmTitle').textContent = text;
-  $('mmSub').textContent = sub;
+  $('sizepick').classList.add('hidden');
   $('mmFind').style.display = 'none';
   $('mmName').style.display = 'none';
+
+  const kedja = mode === 'chain';
+  $('mmTitle').textContent = kedja ? `KEDJAN · ${have}/${size}` : 'SÖKER MOTSTÅNDARE';
+  $('mmSub').textContent = need > 0
+    ? `Väntar på ${need} spelare till. Öppna spelet i en till flik eller skicka länken till en kompis.`
+    : 'Startar…';
+
+  const list = $('lobbylist');
+  list.classList.remove('hidden');
+  list.innerHTML = Array.from({ length: size }, (_, i) => {
+    const nm = names[i];
+    return `<div class="lobbyrow${nm ? ' in' : ''}">
+      <span class="no">${i + 1}</span>
+      <span class="nm">${nm || 'väntar…'}</span>
+      <span class="st">${nm ? '✓' : '…'}</span>
+    </div>`;
+  }).join('');
 }
 
 export function hideOverlays() {
   $('startOv').classList.add('hidden');
   $('mmOv').classList.add('hidden');
   $('endOv').classList.add('hidden');
+}
+
+/* Rättar placeringen i efterhand. Slutskärmen visas i samma stund banan
+   faller, med en siffra räknad lokalt — faller två banor samtidigt har båda
+   gissat samma, och då är det serverns svar som gäller. */
+export function setPlacement(place, size) {
+  const box = $('endStats');
+  if (!box) return;
+  const cell = [...box.children].find(el => el.textContent.endsWith('PLACERING'));
+  if (!cell) return;
+  const b = cell.querySelector('b');
+  if (!b || b.textContent === `${place}/${size}`) return;
+  b.textContent = `${place}/${size}`;
+  $('endSub').textContent =
+    `Din nexus föll. Du kom ${place}:a av ${size} — kedjan spelar vidare utan dig.`;
 }
 
 export function showEnd({ win, title, sub, stats, showNext }) {
