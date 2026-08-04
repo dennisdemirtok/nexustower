@@ -74,6 +74,11 @@ function newMatch({ mode, mapIndex, foeName, net }) {
     kedja ? `Du anfaller ${G.foe.name} · ${net.attacker} anfaller dig` : `${M.name} · ${G.foe.name}`);
   snapT = 0;
   lifeT = 0;
+  /* Nollställ klockan. Vakthunden håller den färsk medan man väntar, men den
+     här raden är garantin: en match ska alltid börja på noll, oavsett vad som
+     drev sidan innan. */
+  sistTick = performance.now();
+  acc = 0;
   R.resize();
   Audio.unlock();
   Audio.startMusic();
@@ -811,15 +816,21 @@ function loop(now) {
    länge sedan loopen gick, och tar över simuleringen om den tystnat. Den
    ritar ingenting och rör inte HUD:en; ingen tittar ändå.
 
-   Bara online. I kampanjen är en gömd flik en paus, och det är meningen.
+   Simulerar bara online. I kampanjen är en gömd flik en paus, och det är
+   meningen — men klockan måste ställas fram ändå. Gör den inte det står den
+   still hela tiden man sitter i menyn eller i lobbyn med fliken gömd, och
+   första klivet efteråt räknar hela väntan som speltid: byggfasen är slut
+   innan man hunnit titta på skärmen. Samma sak när en pausad kampanj
+   återupptas. Därför flyttas sistTick fram i varje läge där vi inte
+   simulerar, i stället för att lämnas åt sitt öde.
 
    Webbläsare bromsar setInterval till ungefär en gång i sekunden i bakgrunden,
    men det spelar ingen roll: advance() räknar på verklig förfluten tid, så
    ett glest anrop hinner ikapp lika mycket som många täta. */
 setInterval(() => {
-  if (!G || G.mode !== 'online' || G.over || G.paused) return;
   const now = performance.now();
   if (now - sistTick < 250) return;      // loopen lever — låt den vara
+  if (!G || G.over || G.paused || G.mode !== 'online') { sistTick = now; return; }
   advance(now);
 }, 200);
 
