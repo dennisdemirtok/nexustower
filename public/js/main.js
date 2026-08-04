@@ -86,6 +86,12 @@ function applyRing(m) {
   if (!G || !G.net) return;
   const n = G.net;
   const bytteMal = n.targetId && m.targetId && n.targetId !== m.targetId;
+  /* Tornen skickas bara när de ändrats, mätt mot en signatur. Får jag en ny
+     ANFALLARE är det en ny person som tittar på min bana — och för dem står
+     signaturen på "oförändrat" trots att de aldrig sett ett enda torn. Utan
+     nollställningen visade deras ANFALL-vy ett tomt fält ända tills jag råkade
+     bygga eller sälja något. */
+  if (n.attackerId && m.attackerId && n.attackerId !== m.attackerId) towerSig = '';
   n.alive = m.alive;
   n.ring = m.ring || n.ring;
   n.attacker = m.attacker;
