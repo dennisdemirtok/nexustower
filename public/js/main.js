@@ -43,6 +43,7 @@ function newMatch({ mode, mapIndex, foeName }) {
     me: makeSide('DU'),
     foe: makeSide(foeName || M.ai.nm),
   };
+  towerSig = '';   // ny match, tvinga fram en full tornlista i första snapshoten
   G.me.board = makeBoard(M);
   G.foe.board = makeBoard(M);
 
@@ -379,6 +380,18 @@ function endMatch(win) {
 /* ============================================================
    Online
    ============================================================ */
+/* Tornen ändras sällan men är dyra att skicka. Vi jämför mot en signatur och
+   skickar listan bara när något faktiskt byggts, uppgraderats eller rivits.
+   null betyder "oförändrat" och tolkas så av mottagaren. */
+let towerSig = '';
+function towerDelta(b) {
+  const rows = b.towers.map(t => [TOWER_KEYS.indexOf(t.type), t.cx, t.cy, t.lv, t.branch === 'b' ? 1 : 0]);
+  const sig = rows.map(r => r.join(',')).join(';');
+  if (sig === towerSig) return null;
+  towerSig = sig;
+  return rows;
+}
+
 function snapshot() {
   const b = G.me.board;
   return {
@@ -387,15 +400,20 @@ function snapshot() {
     // HUD:en stod still hela matchen online. Kapplöpningen i ekonomi är
     // hela spelet — den måste synas.
     i: Math.round(G.me.income),
-    tw: b.towers.map(t => [TOWER_KEYS.indexOf(t.type), t.cx, t.cy, t.lv, t.branch === 'b' ? 1 : 0]),
+    tw: towerDelta(b),
     /* Döende creeps hör inte hemma i snapshoten. De ligger kvar lokalt för
        dödsanimationen, men skickade vi dem växte meddelandet i takt med hur
        mycket som dödades — och när det blev stort nog kom det inte fram
        alls, vilket är varför motståndarens creeps försvann mitt i ett
        anfall. Taket är en sista säkring. */
-    cr: b.creeps.filter(c => c.t >= 0 && !c.dead).slice(0, 120).map(c => [
-      c.id, CREEP_KEYS.indexOf(c.type), +c.x.toFixed(2), +c.y.toFixed(2),
-      +(c.hp / c.maxHp).toFixed(2), c.lv, c.slow > 0 ? 1 : 0, +c.t.toFixed(2),
+    /* Inget tak längre. Ett tak dolde creeps, men det som faktiskt fick vyn
+       att sluta uppdatera var storleken: tornen skickades i sin helhet sex
+       gånger i sekunden, och efter tjugo minuter är det sextio torn plus
+       hundratals creeps i varje meddelande. Tornen skickas nu bara när de
+       ändrats — se tw ovan — och creepsen bantas till en decimal. */
+    cr: b.creeps.filter(c => c.t >= 0 && !c.dead).map(c => [
+      c.id, CREEP_KEYS.indexOf(c.type), +c.x.toFixed(1), +c.y.toFixed(1),
+      +(c.hp / c.maxHp).toFixed(2), c.lv, c.slow > 0 ? 1 : 0, +c.t.toFixed(1),
     ]),
   };
 }
@@ -405,12 +423,13 @@ function applySnapshot(s) {
   const b = G.foe.board;
   b.lives = s.l;
   if (s.i !== undefined) G.foe.income = s.i;
-  b.towers = s.tw.map(a => ({
+  if (s.tw) b.towers = s.tw.map(a => ({
     type: TOWER_KEYS[a[0]], cx: a[1], cy: a[2], lv: a[3],
     branch: a[3] >= BASE_LEVELS ? (a[4] ? 'b' : 'a') : null,
     cd: 0, invested: 0, angle: -1.57, flash: 0,
   }));
-  rebuildSolid(b);
+  // Fältet räknas bara om när tornen faktiskt ändrats.
+  if (s.tw) rebuildSolid(b);
   const map = new Map(b.creeps.map(c => [c.id, c]));
   const seen = new Set();
   for (const a of s.cr) {
