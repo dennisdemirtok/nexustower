@@ -258,7 +258,14 @@ function stepCreeps(b, dt, hooks) {
         if (q < bast) { bast = q; mal = tw; }
       }
       if (mal) {
-        mal.hp -= d0.siege * dt;
+        /* Skadan är en andel av tornets maxliv, inte ett fast tal. Med fast
+           skada blev spannet orimligt: ett trätorn för 50 guld har 3000 liv
+           och föll på sju sekunder, medan ett nivå 6-torn med sjuttontusen i
+           sig har en miljon och hade tagit fyrtio minuter. Belägraren gjorde
+           alltså skada hela tiden — den syntes bara aldrig på det som var
+           värt att riva. Nu tar en KROSSARE lika lång tid på vilket torn som
+           helst, och det är antalet belägrare som avgör. */
+        mal.hp -= mal.maxHp * d0.siege * dt;
         c.siegeFx = (c.siegeFx || 0) - dt;
         if (c.siegeFx <= 0) {
           c.siegeFx = 0.28;
